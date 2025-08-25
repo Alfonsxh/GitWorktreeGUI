@@ -1,0 +1,7 @@
+worktree /Users/project/main
+HEAD abc1234567890abcdef1234567890abcdef12345
+branch refs/heads/main
+
+worktree /Users/project/detached
+HEAD 9876543210fedcba9876543210fedcba98765432
+detached

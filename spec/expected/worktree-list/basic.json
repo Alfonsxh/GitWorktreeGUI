@@ -1,0 +1,23 @@
+[
+  {
+    "path": "/Users/project/main",
+    "head": "abc1234567890abcdef1234567890abcdef12345",
+    "branch": "main",
+    "locked": false,
+    "isMainWorktree": true
+  },
+  {
+    "path": "/Users/project/feature-ai",
+    "head": "def1234567890abcdef1234567890abcdef12345",
+    "branch": "feature-ai",
+    "locked": false,
+    "isMainWorktree": false
+  },
+  {
+    "path": "/Users/project/bugfix-123",
+    "head": "1234567890abcdef1234567890abcdef12345678",
+    "branch": "bugfix-123",
+    "locked": false,
+    "isMainWorktree": false
+  }
+]

@@ -1,0 +1,60 @@
+name: VS Code Extension CI
+
+on:
+  push:
+    paths:
+      - 'plugins/vscode/**'
+      - 'packages/core/**'
+      - '.github/workflows/ci-vscode.yml'
+  pull_request:
+    paths:
+      - 'plugins/vscode/**'
+      - 'packages/core/**'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        vscode: ['stable']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd plugins/vscode && npm ci
+      
+      - name: Compile extension
+        working-directory: plugins/vscode
+        run: npm run compile
+      
+      - name: Run tests (Linux)
+        if: runner.os == 'Linux'
+        working-directory: plugins/vscode
+        run: xvfb-run -a npm test
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode }}
+      
+      - name: Run tests (Windows/macOS)
+        if: runner.os != 'Linux'
+        working-directory: plugins/vscode
+        run: npm test
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode }}
+      
+      - name: Package extension
+        working-directory: plugins/vscode
+        run: npx vsce package --no-dependencies
+      
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v3
+        with:
+          name: vscode-extension-${{ matrix.os }}
+          path: plugins/vscode/*.vsix

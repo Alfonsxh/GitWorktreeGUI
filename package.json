@@ -1,0 +1,27 @@
+{
+  "name": "git-worktree-manager",
+  "version": "1.0.0",
+  "description": "A cross-IDE Git Worktree management tool optimized for AI-assisted programming workflows",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "plugins/*"
+  ],
+  "scripts": {
+    "test": "jest",
+    "test:core": "npm run test -w @git-worktree/core",
+    "build:core": "npm run build -w @git-worktree/core",
+    "dev:vscode": "cd plugins/vscode && npm run watch",
+    "compile:vscode": "cd plugins/vscode && npm run compile",
+    "package:vscode": "cd plugins/vscode && npm run package",
+    "dev:jetbrains": "cd plugins/jetbrains && ./gradlew runIde"
+  },
+  "keywords": ["git", "worktree", "vscode", "jetbrains", "ide"],
+  "author": "Alfons",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  }
+}
