@@ -7,31 +7,92 @@ interface FileNode {
   isDirectory: boolean;
   children?: FileNode[];
   expanded?: boolean;
+  status?: string; // Git status: M, A, D, ?
 }
 
 interface FileTreeProps {
   rootPath: string;
+  onFileSelect?: (filePath: string) => void;
 }
 
-const FileTree: React.FC<FileTreeProps> = ({ rootPath }) => {
+const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [filterMode, setFilterMode] = useState<'all' | 'modified'>('all');
+  const [gitStatus, setGitStatus] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     loadDirectory(rootPath);
+    loadGitStatus();
+  }, [rootPath]);
+
+  useEffect(() => {
+    const interval = setInterval(loadGitStatus, 5000); // Refresh git status every 5 seconds
+    return () => clearInterval(interval);
   }, [rootPath]);
 
   const loadDirectory = async (dirPath: string) => {
     try {
       const files = await window.electronAPI.readDirectory(dirPath);
-      setTree(files);
+      setTree(addGitStatusToNodes(files));
     } catch (error) {
       console.error('Failed to load directory:', error);
     }
   };
 
+  const loadGitStatus = async () => {
+    try {
+      const status = await window.electronAPI.gitStatus(rootPath);
+      setGitStatus(status);
+      // Update tree with new status
+      setTree(prevTree => addGitStatusToNodes(prevTree));
+    } catch (error) {
+      console.error('Failed to load git status:', error);
+    }
+  };
+
+  const addGitStatusToNodes = (nodes: FileNode[]): FileNode[] => {
+    return nodes.map(node => ({
+      ...node,
+      status: gitStatus[node.path],
+      children: node.children ? addGitStatusToNodes(node.children) : undefined
+    }));
+  };
+
+  const hasModifiedChildren = (node: FileNode): boolean => {
+    if (node.status) return true;
+    if (node.children) {
+      return node.children.some(child => hasModifiedChildren(child));
+    }
+    return false;
+  };
+
+  const filterNodes = (nodes: FileNode[]): FileNode[] => {
+    if (filterMode === 'all') return nodes;
+
+    return nodes.filter(node => {
+      if (node.isDirectory) {
+        return hasModifiedChildren(node);
+      }
+      return node.status !== undefined;
+    }).map(node => ({
+      ...node,
+      children: node.children ? filterNodes(node.children) : undefined
+    }));
+  };
+
   const toggleExpanded = async (node: FileNode) => {
-    if (!node.isDirectory) return;
+    console.log('toggleExpanded called for node:', node);
+    if (!node.isDirectory) {
+      console.log('Node is a file, calling onFileSelect with path:', node.path);
+      if (onFileSelect) {
+        onFileSelect(node.path);
+      } else {
+        console.warn('onFileSelect is not defined!');
+      }
+      return;
+    }
+    console.log('Node is a directory, expanding/collapsing');
 
     const newExpanded = new Set(expandedPaths);
     if (newExpanded.has(node.path)) {
@@ -45,7 +106,7 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath }) => {
         const updateNode = (nodes: FileNode[]): FileNode[] => {
           return nodes.map(n => {
             if (n.path === node.path) {
-              return { ...n, children };
+              return { ...n, children: addGitStatusToNodes(children) };
             }
             if (n.children) {
               return { ...n, children: updateNode(n.children) };
@@ -57,6 +118,16 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath }) => {
       }
     }
     setExpandedPaths(newExpanded);
+  };
+
+  const getStatusIndicator = (status?: string) => {
+    switch (status) {
+      case 'M': return <span className="file-status modified">M</span>;
+      case 'A': return <span className="file-status added">A</span>;
+      case 'D': return <span className="file-status deleted">D</span>;
+      case '?': return <span className="file-status untracked">?</span>;
+      default: return null;
+    }
   };
 
   const renderNode = (node: FileNode, level: number = 0): React.ReactElement => {
@@ -76,6 +147,7 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath }) => {
             <span className="file-tree-icon">📄</span>
           )}
           <span className="file-tree-name">{node.name}</span>
+          {getStatusIndicator(node.status)}
         </div>
         {node.isDirectory && isExpanded && node.children && (
           <div>
@@ -86,11 +158,32 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath }) => {
     );
   };
 
+  const filteredTree = filterNodes(tree);
+
   return (
     <div className="file-tree">
-      <div className="file-tree-header">Files</div>
+      <div className="file-tree-header">
+        <span>Files</span>
+        <div className="file-tree-controls">
+          <select
+            className="file-tree-filter"
+            value={filterMode}
+            onChange={(e) => setFilterMode(e.target.value as 'all' | 'modified')}
+          >
+            <option value="all">🔍 All Files</option>
+            <option value="modified">🔍 Modified Files</option>
+          </select>
+          <button
+            className="file-tree-refresh"
+            onClick={loadGitStatus}
+            title="Refresh Git Status"
+          >
+            ↻
+          </button>
+        </div>
+      </div>
       <div className="file-tree-content">
-        {tree.map(node => renderNode(node))}
+        {filteredTree.map(node => renderNode(node))}
       </div>
     </div>
   );

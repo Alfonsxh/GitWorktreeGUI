@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build application
+      run: npm run build:prod
+
+    - name: Build and release for Linux
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npm run dist:linux
+        # Upload to GitHub Release
+        for file in release/*.{AppImage,deb,rpm}; do
+          if [ -f "$file" ]; then
+            echo "Uploading $file"
+          fi
+        done
+
+    - name: Build and release for Windows
+      if: matrix.os == 'windows-latest'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npm run dist:win
+
+    - name: Build and release for macOS
+      if: matrix.os == 'macos-latest'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CSC_IDENTITY_AUTO_DISCOVERY: false
+      run: |
+        npm run dist:mac
+
+    - name: Create Release
+      if: matrix.os == 'ubuntu-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          release/*.AppImage
+          release/*.deb
+          release/*.rpm
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Windows artifacts
+      if: matrix.os == 'windows-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: false
+        prerelease: false
+        files: |
+          release/*.exe
+          release/*.msi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload macOS artifacts
+      if: matrix.os == 'macos-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: false
+        prerelease: false
+        files: |
+          release/*.dmg
+          release/*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

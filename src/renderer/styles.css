@@ -282,3 +282,230 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Tab Manager Styles */
+.tab-bar {
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.tab-list {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+  gap: 2px;
+  padding: 4px;
+}
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 100px;
+  max-width: 200px;
+  position: relative;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.tab-item:hover {
+  background: var(--bg-hover);
+}
+
+.tab-item.active {
+  background: var(--bg-main);
+  border-bottom-color: var(--bg-main);
+  z-index: 1;
+}
+
+.tab-icon {
+  margin-right: 6px;
+  font-size: 14px;
+}
+
+.tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  margin-left: 8px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+.tab-add {
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+.tab-add:hover {
+  background: var(--bg-hover);
+}
+
+.tab-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: var(--bg-main);
+}
+
+/* File Editor Styles */
+.file-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  min-height: 40px;
+}
+
+.editor-file-path {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-dirty-indicator {
+  margin-left: 8px;
+  color: var(--warning);
+  font-size: 16px;
+}
+
+.editor-save-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.editor-save-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.editor-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* File Tree Enhanced Styles */
+.file-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-main);
+}
+
+.file-tree-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-tree-filter {
+  padding: 2px 4px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.file-tree-filter:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.file-tree-refresh {
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: background 0.2s;
+}
+
+.file-tree-refresh:hover {
+  background: var(--bg-hover);
+}
+
+.file-status {
+  margin-left: auto;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.file-status.modified {
+  background: #ffeaa7;
+  color: #f39c12;
+}
+
+.file-status.added {
+  background: #d4edda;
+  color: #155724;
+}
+
+.file-status.deleted {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.file-status.untracked {
+  background: #e2e3e5;
+  color: #383d41;
+}

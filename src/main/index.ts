@@ -126,3 +126,63 @@ ipcMain.handle('read-directory', async (_, dirPath: string) => {
     return [];
   }
 });
+
+// Git status handler
+ipcMain.handle('git-status', async (_, worktreePath: string) => {
+  if (!gitManager) return {};
+
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+
+    const { stdout } = await execAsync('git status --porcelain', {
+      cwd: worktreePath
+    });
+
+    const files: { [key: string]: string } = {};
+    const lines = stdout.split('\n').filter((line: string) => line.trim());
+
+    lines.forEach((line: string) => {
+      const status = line.substring(0, 2).trim();
+      const filePath = line.substring(3);
+      const fullPath = path.join(worktreePath, filePath);
+
+      // Map git status codes to simple status
+      let fileStatus = '?';
+      if (status === 'M' || status === 'MM') fileStatus = 'M';
+      else if (status === 'A' || status === 'AM') fileStatus = 'A';
+      else if (status === 'D') fileStatus = 'D';
+      else if (status === '??') fileStatus = '?';
+      else if (status.includes('M')) fileStatus = 'M';
+
+      files[fullPath] = fileStatus;
+    });
+
+    return files;
+  } catch (error) {
+    console.error('Failed to get git status:', error);
+    return {};
+  }
+});
+
+// File read/write handlers
+ipcMain.handle('read-file', async (_, filePath: string) => {
+  try {
+    const content = await fs.readFile(filePath, 'utf-8');
+    return content;
+  } catch (error) {
+    console.error('Failed to read file:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('write-file', async (_, filePath: string, content: string) => {
+  try {
+    await fs.writeFile(filePath, content, 'utf-8');
+    return true;
+  } catch (error) {
+    console.error('Failed to write file:', error);
+    throw error;
+  }
+});

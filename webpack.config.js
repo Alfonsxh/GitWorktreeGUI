@@ -1,9 +1,11 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 module.exports = [
   {
-    mode: 'development',
+    mode: isDevelopment ? 'development' : 'production',
     entry: './src/main/index.ts',
     target: 'electron-main',
     module: {
@@ -31,7 +33,7 @@ module.exports = [
     }
   },
   {
-    mode: 'development',
+    mode: isDevelopment ? 'development' : 'production',
     entry: './src/main/preload.ts',
     target: 'electron-preload',
     module: {
@@ -52,10 +54,10 @@ module.exports = [
     }
   },
   {
-    mode: 'development',
+    mode: isDevelopment ? 'development' : 'production',
     entry: './src/renderer/index.tsx',
     target: 'electron-renderer',
-    devtool: 'source-map',
+    devtool: isDevelopment ? 'source-map' : false,
     module: {
       rules: [
         {

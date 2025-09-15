@@ -3,6 +3,8 @@ import WorktreeList from './components/WorktreeList';
 import Terminal from './components/Terminal';
 import FileTree from './components/FileTree';
 import CreateWorktreeModal from './components/CreateWorktreeModal';
+import TabManager, { Tab } from './components/TabManager';
+import FileEditor from './components/FileEditor';
 import { Worktree } from '../shared/types';
 
 declare global {
@@ -20,6 +22,9 @@ declare global {
       onTerminalOutput: (sessionId: string, callback: (data: string) => void) => () => void;
       onTerminalClosed: (sessionId: string, callback: () => void) => () => void;
       readDirectory: (dirPath: string) => Promise<any[]>;
+      gitStatus: (worktreePath: string) => Promise<{ [key: string]: string }>;
+      readFile: (filePath: string) => Promise<string>;
+      writeFile: (filePath: string, content: string) => Promise<boolean>;
     };
   }
 }
@@ -31,13 +36,27 @@ function App() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [terminalSessions, setTerminalSessions] = useState<Map<string, string>>(new Map()); // worktreePath -> sessionId
   const [showFileTree, setShowFileTree] = useState(true);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [fileContents, setFileContents] = useState<Map<string, string>>(new Map());
 
   const loadWorktrees = async () => {
     if (projectPath) {
       const list = await window.electronAPI.listWorktrees();
       setWorktrees(list);
       if (list.length > 0 && !selectedWorktree) {
-        setSelectedWorktree(list[0]);
+        const worktree = list[0];
+        setSelectedWorktree(worktree);
+        // Create initial terminal tab
+        const terminalTab: Tab = {
+          id: `terminal-${worktree.path}`,
+          title: 'Terminal',
+          type: 'terminal',
+          content: worktree.path,
+          isClosable: false
+        };
+        setTabs([terminalTab]);
+        setActiveTabId(terminalTab.id);
       }
     }
   };
@@ -77,9 +96,122 @@ function App() {
     }
   };
 
+  const handleFileSelect = async (filePath: string) => {
+    console.log('handleFileSelect called with:', filePath);
+    console.log('Current tabs:', tabs);
+
+    // Check if file is already open
+    const existingTab = tabs.find(tab => tab.content === filePath && tab.type === 'editor');
+    if (existingTab) {
+      console.log('File already open, switching to tab:', existingTab);
+      setActiveTabId(existingTab.id);
+      return;
+    }
+
+    // Load file content
+    try {
+      console.log('Loading file content...');
+      const content = await window.electronAPI.readFile(filePath);
+      console.log('File content loaded, length:', content.length);
+      setFileContents(prev => new Map(prev).set(filePath, content));
+
+      // Create new tab
+      const fileName = filePath.split('/').pop() || 'Untitled';
+      const newTab: Tab = {
+        id: `editor-${Date.now()}`,
+        title: fileName,
+        type: 'editor',
+        content: filePath,
+        isDirty: false,
+        isClosable: true
+      };
+      console.log('Creating new tab:', newTab);
+
+      setTabs(prev => {
+        const newTabs = [...prev, newTab];
+        console.log('Updated tabs:', newTabs);
+        return newTabs;
+      });
+      setActiveTabId(newTab.id);
+    } catch (error) {
+      console.error('Failed to open file:', error);
+      alert('Failed to open file: ' + error);
+    }
+  };
+
+  const handleTabClose = (tabId: string) => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab?.isDirty) {
+      if (!confirm(`File has unsaved changes. Close anyway?`)) {
+        return;
+      }
+    }
+
+    setTabs(prev => prev.filter(t => t.id !== tabId));
+    if (activeTabId === tabId) {
+      const remainingTabs = tabs.filter(t => t.id !== tabId);
+      if (remainingTabs.length > 0) {
+        setActiveTabId(remainingTabs[0].id);
+      }
+    }
+  };
+
+  const handleFileChange = (filePath: string, content: string) => {
+    setFileContents(prev => new Map(prev).set(filePath, content));
+    setTabs(prev => prev.map(tab => {
+      if (tab.content === filePath && tab.type === 'editor') {
+        return { ...tab, isDirty: true };
+      }
+      return tab;
+    }));
+  };
+
+  const handleFileSave = async (filePath: string, content: string) => {
+    try {
+      await window.electronAPI.writeFile(filePath, content);
+      setTabs(prev => prev.map(tab => {
+        if (tab.content === filePath && tab.type === 'editor') {
+          return { ...tab, isDirty: false };
+        }
+        return tab;
+      }));
+    } catch (error) {
+      console.error('Failed to save file:', error);
+      alert('Failed to save file: ' + error);
+    }
+  };
+
+  const handleWorktreeSelect = (worktree: Worktree) => {
+    setSelectedWorktree(worktree);
+    // Update or create terminal tab for this worktree
+    const terminalTabId = `terminal-${worktree.path}`;
+    const existingTab = tabs.find(tab => tab.id === terminalTabId);
+
+    if (!existingTab) {
+      const terminalTab: Tab = {
+        id: terminalTabId,
+        title: 'Terminal',
+        type: 'terminal',
+        content: worktree.path,
+        isClosable: false
+      };
+      setTabs(prev => {
+        // Remove other terminal tabs and add new one
+        const nonTerminalTabs = prev.filter(t => t.type !== 'terminal');
+        return [terminalTab, ...nonTerminalTabs];
+      });
+      setActiveTabId(terminalTabId);
+    }
+  };
+
   useEffect(() => {
     loadWorktrees();
   }, [projectPath]);
+
+  useEffect(() => {
+    console.log('Tabs state changed:', tabs);
+    console.log('Active tab ID:', activeTabId);
+  }, [tabs, activeTabId]);
 
   return (
     <div className="app">
@@ -120,7 +252,7 @@ function App() {
           <WorktreeList
             worktrees={worktrees}
             selectedWorktree={selectedWorktree}
-            onSelect={setSelectedWorktree}
+            onSelect={handleWorktreeSelect}
             onDelete={handleDeleteWorktree}
           />
         </div>
@@ -130,30 +262,74 @@ function App() {
             <div style={{ display: 'flex', height: '100%' }}>
               {showFileTree && (
                 <div className="file-tree-panel">
-                  <FileTree rootPath={selectedWorktree.path} />
+                  <FileTree
+                    rootPath={selectedWorktree.path}
+                    onFileSelect={handleFileSelect}
+                  />
                 </div>
               )}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                {/* Render all terminals but only show the selected one */}
-                {worktrees.map(worktree => (
-                  <div
-                    key={worktree.path}
-                    style={{
-                      flex: 1,
-                      display: selectedWorktree.path === worktree.path ? 'flex' : 'none',
-                      flexDirection: 'column',
-                      minHeight: 0
-                    }}
-                  >
-                    <Terminal
-                      workdir={worktree.path}
-                      sessionId={terminalSessions.get(worktree.path) || null}
-                      onSessionCreated={(sessionId) => {
-                        setTerminalSessions(prev => new Map(prev).set(worktree.path, sessionId));
-                      }}
-                    />
-                  </div>
-                ))}
+                {tabs.length > 0 && (
+                  <TabManager
+                    tabs={tabs}
+                    activeTabId={activeTabId}
+                    onTabChange={setActiveTabId}
+                    onTabClose={handleTabClose}
+                  />
+                )}
+                <div className="tab-content">
+                  {tabs.map(tab => {
+                    const isActive = tab.id === activeTabId;
+
+                    if (tab.type === 'terminal') {
+                      const worktree = worktrees.find(w => w.path === tab.content);
+                      if (!worktree) return null;
+
+                      return (
+                        <div
+                          key={tab.id}
+                          style={{
+                            flex: 1,
+                            display: isActive ? 'flex' : 'none',
+                            flexDirection: 'column',
+                            minHeight: 0
+                          }}
+                        >
+                          <Terminal
+                            workdir={worktree.path}
+                            sessionId={terminalSessions.get(worktree.path) || null}
+                            onSessionCreated={(sessionId) => {
+                              setTerminalSessions(prev => new Map(prev).set(worktree.path, sessionId));
+                            }}
+                          />
+                        </div>
+                      );
+                    } else if (tab.type === 'editor') {
+                      const content = fileContents.get(tab.content) || '';
+
+                      return (
+                        <div
+                          key={tab.id}
+                          style={{
+                            flex: 1,
+                            display: isActive ? 'flex' : 'none',
+                            flexDirection: 'column',
+                            minHeight: 0
+                          }}
+                        >
+                          <FileEditor
+                            filePath={tab.content}
+                            content={content}
+                            onChange={(value) => handleFileChange(tab.content, value)}
+                            onSave={(value) => handleFileSave(tab.content, value)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
+                </div>
               </div>
             </div>
           ) : (

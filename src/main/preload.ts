@@ -36,5 +36,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // File system API
   readDirectory: (dirPath: string) =>
-    ipcRenderer.invoke('read-directory', dirPath)
+    ipcRenderer.invoke('read-directory', dirPath),
+  gitStatus: (worktreePath: string) =>
+    ipcRenderer.invoke('git-status', worktreePath),
+  readFile: (filePath: string) =>
+    ipcRenderer.invoke('read-file', filePath),
+  writeFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke('write-file', filePath, content)
 });
