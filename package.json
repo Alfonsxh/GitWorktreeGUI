@@ -1,27 +1,43 @@
 {
-  "name": "git-worktree-manager",
+  "name": "gitworktreegui",
   "version": "1.0.0",
-  "description": "A cross-IDE Git Worktree management tool optimized for AI-assisted programming workflows",
-  "private": true,
-  "workspaces": [
-    "packages/*",
-    "plugins/*"
-  ],
+  "description": "",
+  "main": "index.js",
   "scripts": {
-    "test": "jest",
-    "test:core": "npm run test -w @git-worktree/core",
-    "build:core": "npm run build -w @git-worktree/core",
-    "dev:vscode": "cd plugins/vscode && npm run watch",
-    "compile:vscode": "cd plugins/vscode && npm run compile",
-    "package:vscode": "cd plugins/vscode && npm run package",
-    "dev:jetbrains": "cd plugins/jetbrains && ./gradlew runIde"
+    "build": "webpack --config webpack.config.js",
+    "dev": "webpack --config webpack.config.js --watch",
+    "start": "electron ./dist/main.js",
+    "electron": "npm run build && npm run start",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["git", "worktree", "vscode", "jetbrains", "ide"],
-  "author": "Alfons",
-  "license": "MIT",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "jest": "^29.0.0",
-    "typescript": "^5.0.0"
+    "@types/node": "^24.4.0",
+    "css-loader": "^7.1.2",
+    "electron": "^30.0.0",
+    "electron-rebuild": "^3.2.9",
+    "html-webpack-plugin": "^5.6.4",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.4",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2"
+  },
+  "dependencies": {
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/addon-unicode11": "^0.8.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/addon-webgl": "^0.18.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "typescript": "^5.9.2"
   }
 }

@@ -1,127 +1,91 @@
-# Git Worktree Manager
+# Git Worktree GUI Manager
 
-A cross-IDE Git Worktree management tool optimized for AI-assisted programming workflows.
+一个简单实用的 Git Worktree 图形化管理工具，专为 AI 编程工具设计。
 
-## Features
+## 功能特性
 
-- 🌳 **Visual Worktree Management**: View and manage all your Git worktrees in a tree view
-- 🚀 **Quick Switch**: Switch between worktrees with a single click or keyboard shortcut
-- 🔒 **Lock/Unlock**: Protect worktrees from accidental modifications
-- 📁 **Easy Navigation**: Open worktrees in terminal or file explorer
-- 🎯 **AI-Optimized**: Perfect for managing multiple parallel development tasks with AI tools
-- 🔄 **Auto-Refresh**: Automatically updates when worktrees change
-- 📊 **Status Bar Integration**: See current worktree at a glance
+- 🗂 **Worktree 管理**：可视化管理所有 Git worktree
+- 💻 **集成终端**：每个 worktree 自动打开对应目录的终端
+- ➕ **快速创建**：一键创建新的 worktree，自动生成规范目录名
+- 🗑 **便捷删除**：右键删除 worktree
+- 🔄 **实时刷新**：随时刷新 worktree 列表
 
-## Supported Platforms
+## 快速开始
 
-- ✅ **VS Code Extension** - Ready for VS Code Marketplace
-- ✅ **JetBrains Plugin** - Ready for JetBrains Marketplace (IntelliJ IDEA, WebStorm, PyCharm, etc.)
-
-## Installation
-
-### VS Code
-
-1. Open VS Code
-2. Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
-3. Search for "Git Worktree Manager"
-4. Click Install
-
-Or install via command line:
-```bash
-code --install-extension git-worktree-manager
-```
-
-### JetBrains IDEs
-
-1. Open any JetBrains IDE (IntelliJ IDEA, WebStorm, PyCharm, etc.)
-2. Go to Settings/Preferences → Plugins
-3. Search for "Git Worktree Manager"
-4. Click Install
-
-Or install from disk:
-```bash
-cd plugins/jetbrains
-./gradlew buildPlugin
-# Install the generated .zip file from build/distributions/
-```
-
-## Usage
-
-### VS Code
-
-1. Open a Git repository in VS Code
-2. Click the Worktree icon in the Activity Bar
-3. View and manage your worktrees in the sidebar
-
-#### Commands
-
-- `Ctrl+Alt+W` / `Cmd+Alt+W`: Quick switch worktree
-- `Git Worktree: Add`: Create a new worktree
-- `Git Worktree: Remove`: Remove selected worktree
-- `Git Worktree: Lock/Unlock`: Lock or unlock a worktree
-
-## Development
-
-This is a monorepo containing:
-- `packages/core`: Shared core logic
-- `plugins/vscode`: VS Code extension
-- `plugins/jetbrains`: JetBrains plugin
-
-### Prerequisites
-
-- Node.js 18+ and npm/pnpm
-- Git 2.30+
-- For JetBrains development: JDK 17+
-
-### Setup
+### 安装依赖
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/git-worktree-manager.git
-cd git-worktree-manager
-
-# Install dependencies
 npm install
-
-# Build core module
-npm run build:core
-
-# Development
-npm run dev:vscode      # VS Code extension
-npm run dev:jetbrains   # JetBrains plugin
 ```
 
-### Testing
+### 重建原生模块
 
 ```bash
-npm test              # Run all tests
-npm run test:core     # Test core module only
+npx electron-rebuild
 ```
 
-## Contributing
+### 开发模式
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+```bash
+npm run dev    # 监听文件变化
+npm start      # 启动应用
+```
+
+### 构建运行
+
+```bash
+npm run electron  # 构建并启动
+```
+
+## 使用说明
+
+1. 点击 "Open Project" 选择 Git 仓库
+2. 左侧显示所有 worktree 列表
+3. 点击 worktree 切换，右侧终端自动切换到对应目录
+4. 点击 "New Worktree" 创建新的 worktree
+5. 右键点击 worktree 可以删除（主 worktree 无法删除）
+
+## 目录结构
+
+```
+GitWorktreeGUI/
+├── src/
+│   ├── main/           # Electron 主进程
+│   │   ├── index.ts    # 主进程入口
+│   │   ├── git.ts      # Git 操作封装
+│   │   ├── terminal.ts # 终端管理
+│   │   └── preload.ts  # 预加载脚本
+│   ├── renderer/       # 渲染进程
+│   │   ├── App.tsx     # 主应用组件
+│   │   └── components/ # UI 组件
+│   └── shared/         # 共享类型定义
+├── dist/               # 构建输出
+└── package.json
+```
+
+## Worktree 目录命名规则
+
+创建的 worktree 会自动放在项目父目录，命名格式：
+`.worktree_[项目名]_[分支名]`
+
+例如：
+- `feature/auth` → `.worktree_MyProject_feature_auth`
+- `bugfix/issue-123` → `.worktree_MyProject_bugfix_123`
+
+## 技术栈
+
+- Electron 30
+- React 19
+- TypeScript
+- xterm.js (终端集成)
+- node-pty (终端进程管理)
+
+## 注意事项
+
+- 需要 macOS 系统
+- 需要安装 Git
+- 使用代理时设置: `npm config set proxy http://127.0.0.1:1097`
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Roadmap
-
-- [x] Core module with Git worktree operations
-- [x] VS Code extension MVP
-- [x] JetBrains plugin MVP  
-- [ ] Advanced merge UI
-- [ ] AI task allocation suggestions
-- [ ] Team collaboration features
-- [ ] Cloud sync for settings
-
-## Support
-
-- 🐛 [Report Issues](https://github.com/yourusername/git-worktree-manager/issues)
-- 💬 [Discussions](https://github.com/yourusername/git-worktree-manager/discussions)
-- 📖 [Documentation](https://github.com/yourusername/git-worktree-manager/wiki)
-
-## Acknowledgments
-
-Built with ❤️ for developers using AI-assisted programming tools.
+ISC

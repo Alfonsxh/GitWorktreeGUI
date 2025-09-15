@@ -1,8 +1,0 @@
-worktree /Users/project/main
-HEAD abc1234567890abcdef1234567890abcdef12345
-branch refs/heads/main
-
-worktree /Users/project/feature-locked
-HEAD def1234567890abcdef1234567890abcdef12345
-branch refs/heads/feature-locked
-locked Locked for maintenance

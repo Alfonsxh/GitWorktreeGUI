@@ -1,1 +1,0 @@
-rootProject.name = "git-worktree-manager-jetbrains"
