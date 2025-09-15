@@ -133,18 +133,16 @@ function App() {
                   <FileTree rootPath={selectedWorktree.path} />
                 </div>
               )}
-              <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 {/* Render all terminals but only show the selected one */}
                 {worktrees.map(worktree => (
                   <div
                     key={worktree.path}
                     style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      display: selectedWorktree.path === worktree.path ? 'block' : 'none'
+                      flex: 1,
+                      display: selectedWorktree.path === worktree.path ? 'flex' : 'none',
+                      flexDirection: 'column',
+                      minHeight: 0
                     }}
                   >
                     <Terminal
