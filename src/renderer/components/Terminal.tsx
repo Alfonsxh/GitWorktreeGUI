@@ -27,7 +27,7 @@ const Terminal: React.FC<TerminalProps> = ({ workdir, sessionId: existingSession
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: '"MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", "Menlo for Powerline", Menlo, Monaco, "Courier New", monospace',
       fontWeight: 'normal',
       fontWeightBold: 'bold',
       lineHeight: 1.2,
