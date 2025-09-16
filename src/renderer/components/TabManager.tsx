@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 export interface Tab {
   id: string;
   title: string;
-  type: 'terminal' | 'editor' | 'git-log';
+  type: 'terminal' | 'editor' | 'git-log' | 'diff';
   content?: any;
   isDirty?: boolean;
   isClosable?: boolean;
@@ -32,6 +32,8 @@ const TabManager: React.FC<TabManagerProps> = ({
         return '📝';
       case 'git-log':
         return '📊';
+      case 'diff':
+        return '⊕';
       default:
         return '📄';
     }

@@ -13,12 +13,12 @@ interface FileNode {
 interface FileTreeProps {
   rootPath: string;
   onFileSelect?: (filePath: string) => void;
+  onDiffView?: (filePath: string) => void;
 }
 
-const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
+const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect, onDiffView }) => {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-  const [filterMode, setFilterMode] = useState<'all' | 'modified'>('all');
   const [gitStatus, setGitStatus] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
@@ -59,27 +59,6 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
     }));
   };
 
-  const hasModifiedChildren = (node: FileNode): boolean => {
-    if (node.status) return true;
-    if (node.children) {
-      return node.children.some(child => hasModifiedChildren(child));
-    }
-    return false;
-  };
-
-  const filterNodes = (nodes: FileNode[]): FileNode[] => {
-    if (filterMode === 'all') return nodes;
-
-    return nodes.filter(node => {
-      if (node.isDirectory) {
-        return hasModifiedChildren(node);
-      }
-      return node.status !== undefined;
-    }).map(node => ({
-      ...node,
-      children: node.children ? filterNodes(node.children) : undefined
-    }));
-  };
 
   const toggleExpanded = async (node: FileNode) => {
     console.log('toggleExpanded called for node:', node);
@@ -130,6 +109,13 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
     }
   };
 
+  const handleDiffClick = (e: React.MouseEvent, node: FileNode) => {
+    e.stopPropagation();
+    if (onDiffView && node.status === 'M') {
+      onDiffView(node.path);
+    }
+  };
+
   const renderNode = (node: FileNode, level: number = 0): React.ReactElement => {
     const isExpanded = expandedPaths.has(node.path);
     const indent = level * 16;
@@ -148,6 +134,15 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
           )}
           <span className="file-tree-name">{node.name}</span>
           {getStatusIndicator(node.status)}
+          {!node.isDirectory && node.status === 'M' && onDiffView && (
+            <button
+              className="file-tree-diff-btn"
+              onClick={(e) => handleDiffClick(e, node)}
+              title="View Diff"
+            >
+              ⊕
+            </button>
+          )}
         </div>
         {node.isDirectory && isExpanded && node.children && (
           <div>
@@ -158,21 +153,11 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
     );
   };
 
-  const filteredTree = filterNodes(tree);
-
   return (
     <div className="file-tree">
       <div className="file-tree-header">
         <span>Files</span>
         <div className="file-tree-controls">
-          <select
-            className="file-tree-filter"
-            value={filterMode}
-            onChange={(e) => setFilterMode(e.target.value as 'all' | 'modified')}
-          >
-            <option value="all">🔍 All Files</option>
-            <option value="modified">🔍 Modified Files</option>
-          </select>
           <button
             className="file-tree-refresh"
             onClick={loadGitStatus}
@@ -183,7 +168,7 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
         </div>
       </div>
       <div className="file-tree-content">
-        {filteredTree.map(node => renderNode(node))}
+        {tree.map(node => renderNode(node))}
       </div>
     </div>
   );

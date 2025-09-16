@@ -1,0 +1,16 @@
+server:
+  port: 8080
+  host: localhost
+  debug: true
+
+database:
+  driver: postgres
+  host: localhost
+  port: 5432
+  name: mydb
+  user: admin
+
+features:
+  - authentication
+  - logging
+  - metrics

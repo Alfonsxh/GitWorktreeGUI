@@ -16,7 +16,12 @@
     "dist:linux": "npm run build:prod && electron-builder --linux",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["git", "worktree", "electron", "gui"],
+  "keywords": [
+    "git",
+    "worktree",
+    "electron",
+    "gui"
+  ],
   "author": "Alfons",
   "license": "MIT",
   "type": "commonjs",
@@ -43,9 +48,13 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
+    "electron-store": "^10.1.0",
     "monaco-editor": "^0.53.0",
     "node-pty": "^1.0.0",
+    "rc-tree": "^5.13.1",
     "react": "^19.1.1",
+    "react-contexify": "^6.0.0",
+    "react-diff-viewer-continued": "^3.4.0",
     "react-dom": "^19.1.1",
     "typescript": "^5.9.2"
   },
