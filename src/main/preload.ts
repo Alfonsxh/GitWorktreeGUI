@@ -41,9 +41,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, handler);
   },
 
+  onGitStatusSummary: (
+    callback: (payload: { worktreePath: string; summary: { dirty: number } }) => void
+  ) => {
+    const channel = 'git-status-summary';
+    const handler = (_: Electron.IpcRendererEvent, payload: { worktreePath: string; summary: { dirty: number } }) =>
+      callback(payload);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
   // File system API
   readDirectory: (dirPath: string) =>
     ipcRenderer.invoke('read-directory', dirPath),
+  deleteFile: (filePath: string) =>
+    ipcRenderer.invoke('delete-file', filePath),
+  startFileWatcher: (dirPath: string) =>
+    ipcRenderer.invoke('start-file-watcher', dirPath),
+  stopFileWatcher: (dirPath: string) =>
+    ipcRenderer.invoke('stop-file-watcher', dirPath),
+  onFileSystemChanged: (handler: (data: any) => void) => {
+    const listener = (_: any, data: any) => handler(data);
+    ipcRenderer.on('file-system-changed', listener);
+    return () => ipcRenderer.removeListener('file-system-changed', listener);
+  },
   gitStatus: (worktreePath: string) =>
     ipcRenderer.invoke('git-status', worktreePath),
   readFile: (filePath: string) =>
@@ -74,6 +95,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Git operations for context menu
   gitCheckout: (worktreePath: string, branch: string) =>
     ipcRenderer.invoke('git-checkout', worktreePath, branch),
+  gitSwitchBranch: (worktreePath: string, branch: string) =>
+    ipcRenderer.invoke('git-switch-branch', worktreePath, branch),
   gitMerge: (worktreePath: string, targetBranch: string) =>
     ipcRenderer.invoke('git-merge', worktreePath, targetBranch),
   gitRebase: (worktreePath: string, targetBranch: string) =>

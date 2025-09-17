@@ -29,7 +29,9 @@ class WindowManager {
         preload: path.join(__dirname, 'preload.js')
       },
       titleBarStyle: 'hiddenInset',
-      trafficLightPosition: { x: 10, y: 10 }
+      trafficLightPosition: { x: 10, y: 10 },
+      show: false,
+      backgroundColor: '#1e1e1e'
     });
 
     const windowId = newWindow.id;
@@ -67,8 +69,8 @@ class WindowManager {
     newWindow.on('closed', () => {
       const info = this.windows.get(windowId);
       if (info) {
-        // Clean up terminal manager
-        // info.terminalManager.closeAllSessions();
+        // Clean up terminal manager sessions tied to this window
+        info.terminalManager.closeAllSessions();
       }
       this.windows.delete(windowId);
     });
@@ -78,6 +80,11 @@ class WindowManager {
       if (projectPath && !newWindow.isDestroyed()) {
         newWindow.webContents.send('load-project', projectPath);
       }
+    });
+
+    // Show window when ready to prevent white flash
+    newWindow.once('ready-to-show', () => {
+      newWindow.show();
     });
 
     // Update window title

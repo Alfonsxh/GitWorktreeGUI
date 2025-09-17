@@ -1,10 +1,16 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
 import * as path from 'path';
 import { shell } from 'electron';
 import { Worktree } from '../shared/types';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+interface GitCommandOptions {
+  cwd?: string;
+  maxBuffer?: number;
+}
 
 export class GitWorktreeManager {
   private repoPath: string;
@@ -13,11 +19,32 @@ export class GitWorktreeManager {
     this.repoPath = repoPath;
   }
 
+  private async runGit(
+    args: string[],
+    options: GitCommandOptions = {}
+  ): Promise<{ stdout: string; stderr: string }> {
+    const { cwd = this.repoPath, maxBuffer = 10 * 1024 * 1024 } = options;
+
+    try {
+      const { stdout, stderr } = await execFileAsync('git', args, {
+        cwd,
+        maxBuffer
+      });
+      return {
+        stdout: stdout?.toString() ?? '',
+        stderr: stderr?.toString() ?? ''
+      };
+    } catch (error: any) {
+      const stderr = error?.stderr?.toString().trim();
+      const stdout = error?.stdout?.toString().trim();
+      const message = stderr || stdout || error.message || 'Unknown git error';
+      throw new Error(message);
+    }
+  }
+
   async list(): Promise<Worktree[]> {
     try {
-      const { stdout } = await execAsync('git worktree list --porcelain', {
-        cwd: this.repoPath
-      });
+      const { stdout } = await this.runGit(['worktree', 'list', '--porcelain']);
 
       return this.parseWorktreeOutput(stdout);
     } catch (error) {
@@ -27,13 +54,13 @@ export class GitWorktreeManager {
   }
 
   async add(branch: string, newBranch: boolean = false): Promise<string> {
-    const worktreePath = this.generateWorktreePath(branch);
-    const command = newBranch
-      ? `git worktree add -b "${branch}" "${worktreePath}" HEAD`
-      : `git worktree add "${worktreePath}" "${branch}"`;
-
     try {
-      await execAsync(command, { cwd: this.repoPath });
+      const worktreePath = this.generateWorktreePath(branch);
+      const args = newBranch
+        ? ['worktree', 'add', '-b', branch, worktreePath, 'HEAD']
+        : ['worktree', 'add', worktreePath, branch];
+
+      await this.runGit(args);
       return worktreePath;
     } catch (error) {
       console.error('Failed to add worktree:', error);
@@ -43,10 +70,47 @@ export class GitWorktreeManager {
 
   async remove(worktreePath: string, force: boolean = false): Promise<void> {
     try {
-      const forceFlag = force ? '--force' : '';
-      await execAsync(`git worktree remove ${forceFlag} "${worktreePath}"`, {
-        cwd: this.repoPath
-      });
+      // Get the branch name before removing the worktree
+      const worktrees = await this.list();
+      const worktree = worktrees.find(w => w.path === worktreePath);
+      const branchToDelete = worktree?.branch;
+      const isMainBranch = worktree?.isMain;
+
+      // Remove the worktree
+      const args = ['worktree', 'remove'];
+      if (force) {
+        args.push('--force');
+      }
+      args.push(worktreePath);
+
+      await this.runGit(args);
+
+      // If this was not the main worktree and has a branch, try to delete the branch
+      if (!isMainBranch && branchToDelete) {
+        try {
+          // Check if the branch still exists and is not checked out anywhere else
+          const remainingWorktrees = await this.list();
+          const branchStillInUse = remainingWorktrees.some(w => w.branch === branchToDelete);
+
+          if (!branchStillInUse) {
+            // Try to delete the branch
+            await this.runGit(['branch', '-d', branchToDelete]);
+          }
+        } catch (branchError: any) {
+          // If branch deletion fails with "not fully merged" error, try force delete if force was specified
+          if (force && branchError.message && branchError.message.includes('not fully merged')) {
+            try {
+              await this.runGit(['branch', '-D', branchToDelete]);
+            } catch (forceBranchError) {
+              // Silently ignore branch deletion errors as they're not critical
+              console.log(`Could not delete branch ${branchToDelete}:`, forceBranchError);
+            }
+          } else {
+            // Silently ignore other branch deletion errors
+            console.log(`Could not delete branch ${branchToDelete}:`, branchError);
+          }
+        }
+      }
     } catch (error: any) {
       // If the error is about modified files, suggest using force
       if (error.message && error.message.includes('contains modified or untracked files')) {
@@ -61,15 +125,20 @@ export class GitWorktreeManager {
     const worktrees: Worktree[] = [];
     const lines = output.split('\n');
     let current: Partial<Worktree> = {};
+    const repoAbsolutePath = path.resolve(this.repoPath);
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
         if (current.path) {
           worktrees.push(current as Worktree);
         }
+        const worktreePath = line.substring(9);
+        const resolvedPath = path.resolve(worktreePath);
         current = {
-          path: line.substring(9),
-          isMain: false,
+          path: worktreePath,
+          head: '',
+          branch: '',
+          isMain: resolvedPath === repoAbsolutePath,
           isLocked: false,
           isPrunable: false
         };
@@ -90,11 +159,6 @@ export class GitWorktreeManager {
       worktrees.push(current as Worktree);
     }
 
-    // Mark main worktree
-    if (worktrees.length > 0 && !worktrees[0].branch) {
-      worktrees[0].isMain = true;
-    }
-
     return worktrees;
   }
 
@@ -103,19 +167,28 @@ export class GitWorktreeManager {
     const parentDir = path.dirname(this.repoPath);
 
     // Clean branch name for directory
-    const cleanBranch = branch
-      .replace(/\//g, '_')
-      .replace(/-/g, '_')
-      .replace(/\./g, '_')
-      .replace(/[^a-zA-Z0-9_]/g, '');
+    const sanitized = (branch || 'worktree')
+      .replace(/[\\\/]/g, '_')
+      .replace(/[^a-zA-Z0-9_]+/g, '_')
+      .replace(/^_+|_+$/g, '');
 
-    return path.join(parentDir, `.worktree_${projectName}_${cleanBranch}`);
+    const cleanBranch = sanitized || 'worktree';
+    const baseName = `.worktree_${projectName}_${cleanBranch}`;
+    let candidate = path.join(parentDir, baseName);
+    let suffix = 1;
+
+    while (fs.existsSync(candidate)) {
+      candidate = path.join(parentDir, `${baseName}_${suffix}`);
+      suffix += 1;
+    }
+
+    return candidate;
   }
 
   // New Git operations for context menu
   async checkout(worktreePath: string, branch: string): Promise<void> {
     try {
-      await execAsync(`git checkout ${branch}`, { cwd: worktreePath });
+      await this.runGit(['checkout', branch], { cwd: worktreePath });
     } catch (error) {
       console.error('Failed to checkout branch:', error);
       throw error;
@@ -124,7 +197,7 @@ export class GitWorktreeManager {
 
   async merge(worktreePath: string, targetBranch: string): Promise<void> {
     try {
-      await execAsync(`git merge ${targetBranch}`, { cwd: worktreePath });
+      await this.runGit(['merge', targetBranch], { cwd: worktreePath });
     } catch (error) {
       console.error('Failed to merge branch:', error);
       throw error;
@@ -133,7 +206,7 @@ export class GitWorktreeManager {
 
   async rebase(worktreePath: string, targetBranch: string): Promise<void> {
     try {
-      await execAsync(`git rebase ${targetBranch}`, { cwd: worktreePath });
+      await this.runGit(['rebase', targetBranch], { cwd: worktreePath });
     } catch (error) {
       console.error('Failed to rebase branch:', error);
       throw error;
@@ -142,8 +215,8 @@ export class GitWorktreeManager {
 
   async push(worktreePath: string, branch?: string): Promise<void> {
     try {
-      const command = branch ? `git push origin ${branch}` : 'git push';
-      await execAsync(command, { cwd: worktreePath });
+      const args = branch ? ['push', 'origin', branch] : ['push'];
+      await this.runGit(args, { cwd: worktreePath });
     } catch (error) {
       console.error('Failed to push branch:', error);
       throw error;
@@ -152,7 +225,7 @@ export class GitWorktreeManager {
 
   async pull(worktreePath: string): Promise<void> {
     try {
-      await execAsync('git pull', { cwd: worktreePath });
+      await this.runGit(['pull'], { cwd: worktreePath });
     } catch (error) {
       console.error('Failed to pull branch:', error);
       throw error;
@@ -161,9 +234,7 @@ export class GitWorktreeManager {
 
   async getRemoteUrl(): Promise<string | null> {
     try {
-      const { stdout } = await execAsync('git remote get-url origin', {
-        cwd: this.repoPath
-      });
+      const { stdout } = await this.runGit(['remote', 'get-url', 'origin']);
       return stdout.trim();
     } catch (error) {
       console.error('Failed to get remote URL:', error);
@@ -173,7 +244,7 @@ export class GitWorktreeManager {
 
   async getCurrentBranch(worktreePath: string): Promise<string> {
     try {
-      const { stdout } = await execAsync('git branch --show-current', {
+      const { stdout } = await this.runGit(['branch', '--show-current'], {
         cwd: worktreePath
       });
       return stdout.trim() || 'main';
@@ -185,9 +256,7 @@ export class GitWorktreeManager {
 
   async getAllBranches(): Promise<string[]> {
     try {
-      const { stdout } = await execAsync('git branch -a', {
-        cwd: this.repoPath
-      });
+      const { stdout } = await this.runGit(['branch', '-a']);
       return stdout
         .split('\n')
         .map(line => line.trim())
@@ -196,6 +265,39 @@ export class GitWorktreeManager {
     } catch (error) {
       console.error('Failed to get branches:', error);
       return [];
+    }
+  }
+
+  async switchBranch(worktreePath: string, branch: string): Promise<void> {
+    try {
+      // Check if there are uncommitted changes
+      const { stdout: statusOutput } = await this.runGit(['status', '--porcelain'], {
+        cwd: worktreePath
+      });
+
+      if (statusOutput.trim()) {
+        throw new Error('Cannot switch branch: You have uncommitted changes. Please commit or stash them first.');
+      }
+
+      // Switch to the branch
+      await this.runGit(['checkout', branch], {
+        cwd: worktreePath
+      });
+    } catch (error: any) {
+      if (error.message && error.message.includes('did not match any file(s) known to git')) {
+        // Try to checkout as a remote branch
+        try {
+          await this.runGit(['checkout', '-b', branch, `origin/${branch}`], {
+            cwd: worktreePath
+          });
+        } catch (innerError) {
+          console.error('Failed to switch branch:', innerError);
+          throw new Error(`Failed to switch to branch "${branch}". The branch may not exist.`);
+        }
+      } else {
+        console.error('Failed to switch branch:', error);
+        throw error;
+      }
     }
   }
 

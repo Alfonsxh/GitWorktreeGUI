@@ -1,10 +1,155 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { GitWorktreeManager } from './git';
+import { watch, FSWatcher } from 'fs';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import windowManager from './windowManager';
 import { createApplicationMenu, updateRecentProjectsMenu } from './menu';
 import appStore from './store';
+import type { WebContents } from 'electron';
+
+const execFileAsync = promisify(execFile);
+const DEFAULT_GIT_BUFFER = 10 * 1024 * 1024;
+
+type GitStatusMap = Record<string, string>;
+
+async function runGitCommand(
+  args: string[],
+  cwd: string,
+  options: { maxBuffer?: number } = {}
+): Promise<{ stdout: string; stderr: string }> {
+  try {
+    const { stdout, stderr } = await execFileAsync('git', args, {
+      cwd,
+      maxBuffer: options.maxBuffer ?? DEFAULT_GIT_BUFFER
+    });
+    return {
+      stdout: stdout?.toString() ?? '',
+      stderr: stderr?.toString() ?? ''
+    };
+  } catch (error: any) {
+    const stderr = error?.stderr?.toString().trim();
+    const stdout = error?.stdout?.toString().trim();
+    const message = stderr || stdout || error.message || 'Unknown git error';
+    throw new Error(message);
+  }
+}
+
+const gitStatusCache = new Map<string, { timestamp: number; data: GitStatusMap }>();
+const gitStatusInflight = new Map<string, Promise<GitStatusMap>>();
+const GIT_STATUS_TTL_MS = 2000;
+
+const resolveWorktreeKey = (worktreePath: string) => path.resolve(worktreePath);
+
+const toGitRelativePath = (worktreePath: string, filePath: string) =>
+  path.relative(worktreePath, filePath).split(path.sep).join('/');
+
+const summariseGitStatus = (files: GitStatusMap) => ({
+  dirty: Object.keys(files).length
+});
+
+// File system watchers for auto-refresh
+const fileWatchers = new Map<string, FSWatcher>();
+
+// Function to setup file system watcher
+const setupFileWatcher = (dirPath: string, webContents: WebContents) => {
+  // Clean up existing watcher if any
+  if (fileWatchers.has(dirPath)) {
+    fileWatchers.get(dirPath)?.close();
+  }
+
+  try {
+    const watcher = watch(dirPath, { recursive: true }, (eventType, filename) => {
+      // Ignore certain patterns
+      if (!filename) return;
+      if (filename.includes('.git/') && !filename.endsWith('.git/index')) return;
+      if (filename.includes('node_modules/')) return;
+      if (filename.startsWith('.')) return;
+
+      // Debounce updates
+      clearTimeout((watcher as any).timeout);
+      (watcher as any).timeout = setTimeout(() => {
+        // Notify renderer of file system change
+        webContents.send('file-system-changed', { path: dirPath, filename, eventType });
+      }, 300);
+    });
+
+    fileWatchers.set(dirPath, watcher);
+  } catch (error) {
+    console.error('Failed to setup file watcher:', error);
+  }
+};
+
+const emitGitStatusSummary = (target: WebContents, worktreePath: string, files: GitStatusMap) => {
+  target.send('git-status-summary', {
+    worktreePath,
+    summary: summariseGitStatus(files)
+  });
+};
+
+const refreshAndEmitGitStatusSummary = async (target: WebContents, worktreePath: string) => {
+  const files = await loadGitStatus(worktreePath);
+  emitGitStatusSummary(target, worktreePath, files);
+};
+
+async function loadGitStatus(worktreePath: string): Promise<GitStatusMap> {
+  const key = resolveWorktreeKey(worktreePath);
+  const now = Date.now();
+  const cached = gitStatusCache.get(key);
+
+  if (cached && now - cached.timestamp < GIT_STATUS_TTL_MS) {
+    return cached.data;
+  }
+
+  const existingPromise = gitStatusInflight.get(key);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const statusPromise = (async () => {
+    const { stdout } = await runGitCommand(['status', '--porcelain'], key);
+
+    const files: GitStatusMap = {};
+    stdout
+      .split('\n')
+      .filter(line => line.trim())
+      .forEach(line => {
+        const status = line.substring(0, 2).trim();
+        const filePath = line.substring(3);
+        // Use full path as key to match file system paths
+        const fullPath = path.join(key, filePath);
+
+        let fileStatus = '?';
+        if (status === 'M' || status === 'MM') fileStatus = 'M';
+        else if (status === 'A' || status === 'AM') fileStatus = 'A';
+        else if (status === 'D') fileStatus = 'D';
+        else if (status === '??') fileStatus = '?';
+        else if (status.includes('M')) fileStatus = 'M';
+
+        files[fullPath] = fileStatus;
+      });
+
+    return files;
+  })();
+
+  gitStatusInflight.set(key, statusPromise);
+
+  try {
+    const data = await statusPromise;
+    gitStatusCache.set(key, { timestamp: Date.now(), data });
+    return data;
+  } catch (error) {
+    gitStatusCache.delete(key);
+    throw error;
+  } finally {
+    gitStatusInflight.delete(key);
+  }
+}
+
+const invalidateGitStatus = (worktreePath: string) => {
+  gitStatusCache.delete(resolveWorktreeKey(worktreePath));
+};
 
 function createInitialWindow() {
   // Check for last opened project
@@ -158,14 +303,16 @@ ipcMain.handle('add-worktree', async (event, branch: string, newBranch: boolean)
 ipcMain.handle('remove-worktree', async (event, worktreePath: string, force: boolean = false) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
-  return await windowInfo.gitManager.remove(worktreePath, force);
+  await windowInfo.gitManager.remove(worktreePath, force);
+  invalidateGitStatus(worktreePath);
+  return;
 });
 
 ipcMain.handle('create-terminal', async (event, workdir: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo) throw new Error('Window not found');
 
-  const session = windowInfo.terminalManager.createSession(workdir);
+  const session = windowInfo.terminalManager.createSession(workdir, event.sender.id);
   return { id: session.id, pid: session.pid };
 });
 
@@ -194,6 +341,21 @@ ipcMain.handle('terminal-get-buffer', (event, sessionId: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo) return [];
   return windowInfo.terminalManager.getSessionBuffer(sessionId);
+});
+
+// Start file system watcher
+ipcMain.handle('start-file-watcher', (event, dirPath: string) => {
+  setupFileWatcher(dirPath, event.sender);
+  return { success: true };
+});
+
+// Stop file system watcher
+ipcMain.handle('stop-file-watcher', (_, dirPath: string) => {
+  if (fileWatchers.has(dirPath)) {
+    fileWatchers.get(dirPath)?.close();
+    fileWatchers.delete(dirPath);
+  }
+  return { success: true };
 });
 
 // File system handlers
@@ -234,37 +396,25 @@ ipcMain.handle('git-status', async (event, worktreePath: string) => {
   if (!windowInfo || !windowInfo.gitManager) return {};
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    const { stdout } = await execAsync('git status --porcelain', {
-      cwd: worktreePath
-    });
-
-    const files: { [key: string]: string } = {};
-    const lines = stdout.split('\n').filter((line: string) => line.trim());
-
-    lines.forEach((line: string) => {
-      const status = line.substring(0, 2).trim();
-      const filePath = line.substring(3);
-      const fullPath = path.join(worktreePath, filePath);
-
-      // Map git status codes to simple status
-      let fileStatus = '?';
-      if (status === 'M' || status === 'MM') fileStatus = 'M';
-      else if (status === 'A' || status === 'AM') fileStatus = 'A';
-      else if (status === 'D') fileStatus = 'D';
-      else if (status === '??') fileStatus = '?';
-      else if (status.includes('M')) fileStatus = 'M';
-
-      files[fullPath] = fileStatus;
-    });
-
+    const files = await loadGitStatus(worktreePath);
+    emitGitStatusSummary(event.sender, worktreePath, files);
     return files;
   } catch (error) {
     console.error('Failed to get git status:', error);
     return {};
+  }
+});
+
+// Delete file/directory handler
+ipcMain.handle('delete-file', async (_, filePath: string) => {
+  const { shell } = require('electron');
+  try {
+    // Use shell.trashItem for safer deletion (moves to recycle bin)
+    await shell.trashItem(filePath);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to delete file/directory:', error);
+    return { success: false, error: error.message };
   }
 });
 
@@ -295,18 +445,9 @@ ipcMain.handle('git-show-file', async (event, worktreePath: string, filePath: st
   if (!windowInfo || !windowInfo.gitManager) return null;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    // Get relative path from worktree root
-    const relativePath = path.relative(worktreePath, filePath);
-
-    // Get file content from HEAD
-    const { stdout } = await execAsync(`git show HEAD:"${relativePath}"`, {
-      cwd: worktreePath,
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    const { stdout } = await runGitCommand(['show', `HEAD:${relativePath}`], worktreePath, {
+      maxBuffer: 10 * 1024 * 1024
     });
 
     return stdout;
@@ -325,18 +466,9 @@ ipcMain.handle('git-diff', async (event, worktreePath: string, filePath: string)
   if (!windowInfo || !windowInfo.gitManager) return null;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    // Get relative path from worktree root
-    const relativePath = path.relative(worktreePath, filePath);
-
-    // Get unified diff
-    const { stdout } = await execAsync(`git diff HEAD -- "${relativePath}"`, {
-      cwd: worktreePath,
-      encoding: 'utf-8',
-      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    const { stdout } = await runGitCommand(['diff', 'HEAD', '--', relativePath], worktreePath, {
+      maxBuffer: 10 * 1024 * 1024
     });
 
     return stdout;
@@ -352,14 +484,11 @@ ipcMain.handle('git-discard', async (event, worktreePath: string, filePath: stri
   if (!windowInfo || !windowInfo.gitManager) return false;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    await runGitCommand(['checkout', 'HEAD', '--', relativePath], worktreePath);
 
-    const relativePath = path.relative(worktreePath, filePath);
-    await execAsync(`git checkout HEAD -- "${relativePath}"`, {
-      cwd: worktreePath
-    });
+    invalidateGitStatus(worktreePath);
+    await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
 
     return true;
   } catch (error) {
@@ -373,14 +502,11 @@ ipcMain.handle('git-stage', async (event, worktreePath: string, filePath: string
   if (!windowInfo || !windowInfo.gitManager) return false;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    await runGitCommand(['add', relativePath], worktreePath);
 
-    const relativePath = path.relative(worktreePath, filePath);
-    await execAsync(`git add "${relativePath}"`, {
-      cwd: worktreePath
-    });
+    invalidateGitStatus(worktreePath);
+    await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
 
     return true;
   } catch (error) {
@@ -394,14 +520,11 @@ ipcMain.handle('git-unstage', async (event, worktreePath: string, filePath: stri
   if (!windowInfo || !windowInfo.gitManager) return false;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    await runGitCommand(['reset', 'HEAD', relativePath], worktreePath);
 
-    const relativePath = path.relative(worktreePath, filePath);
-    await execAsync(`git reset HEAD "${relativePath}"`, {
-      cwd: worktreePath
-    });
+    invalidateGitStatus(worktreePath);
+    await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
 
     return true;
   } catch (error) {
@@ -415,15 +538,8 @@ ipcMain.handle('git-log-file', async (event, worktreePath: string, filePath: str
   if (!windowInfo || !windowInfo.gitManager) return [];
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    const relativePath = path.relative(worktreePath, filePath);
-    const { stdout } = await execAsync(`git log --oneline -10 -- "${relativePath}"`, {
-      cwd: worktreePath,
-      encoding: 'utf-8'
-    });
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    const { stdout } = await runGitCommand(['log', '--oneline', '-10', '--', relativePath], worktreePath);
 
     return stdout.split('\n').filter((line: string) => line.trim()).map((line: string) => {
       const [hash, ...messageParts] = line.split(' ');
@@ -443,14 +559,8 @@ ipcMain.handle('git-blame', async (event, worktreePath: string, filePath: string
   if (!windowInfo || !windowInfo.gitManager) return null;
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    const relativePath = path.relative(worktreePath, filePath);
-    const { stdout } = await execAsync(`git blame --line-porcelain "${relativePath}"`, {
-      cwd: worktreePath,
-      encoding: 'utf-8',
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    const { stdout } = await runGitCommand(['blame', '--line-porcelain', relativePath], worktreePath, {
       maxBuffer: 10 * 1024 * 1024
     });
 
@@ -467,15 +577,8 @@ ipcMain.handle('git-diff-stat', async (event, worktreePath: string, filePath: st
   if (!windowInfo || !windowInfo.gitManager) return { additions: 0, deletions: 0 };
 
   try {
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-
-    const relativePath = path.relative(worktreePath, filePath);
-    const { stdout } = await execAsync(`git diff --numstat HEAD -- "${relativePath}"`, {
-      cwd: worktreePath,
-      encoding: 'utf-8'
-    });
+    const relativePath = toGitRelativePath(worktreePath, filePath);
+    const { stdout } = await runGitCommand(['diff', '--numstat', 'HEAD', '--', relativePath], worktreePath);
 
     if (stdout.trim()) {
       const [additions, deletions] = stdout.trim().split('\t').map((n: string) => parseInt(n) || 0);
@@ -493,31 +596,53 @@ ipcMain.handle('git-diff-stat', async (event, worktreePath: string, filePath: st
 ipcMain.handle('git-checkout', async (event, worktreePath: string, branch: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
-  return await windowInfo.gitManager.checkout(worktreePath, branch);
+  await windowInfo.gitManager.checkout(worktreePath, branch);
+  await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
+  invalidateGitStatus(worktreePath);
+  return;
+});
+
+ipcMain.handle('git-switch-branch', async (event, worktreePath: string, branch: string) => {
+  const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
+  if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
+  await windowInfo.gitManager.switchBranch(worktreePath, branch);
+  await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
+  invalidateGitStatus(worktreePath);
+  return;
 });
 
 ipcMain.handle('git-merge', async (event, worktreePath: string, targetBranch: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
-  return await windowInfo.gitManager.merge(worktreePath, targetBranch);
+  await windowInfo.gitManager.merge(worktreePath, targetBranch);
+  await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
+  invalidateGitStatus(worktreePath);
+  return;
 });
 
 ipcMain.handle('git-rebase', async (event, worktreePath: string, targetBranch: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
-  return await windowInfo.gitManager.rebase(worktreePath, targetBranch);
+  await windowInfo.gitManager.rebase(worktreePath, targetBranch);
+  await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
+  invalidateGitStatus(worktreePath);
+  return;
 });
 
 ipcMain.handle('git-push', async (event, worktreePath: string, branch?: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
-  return await windowInfo.gitManager.push(worktreePath, branch);
+  await windowInfo.gitManager.push(worktreePath, branch);
+  return;
 });
 
 ipcMain.handle('git-pull', async (event, worktreePath: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) throw new Error('No repository opened');
-  return await windowInfo.gitManager.pull(worktreePath);
+  await windowInfo.gitManager.pull(worktreePath);
+  await refreshAndEmitGitStatusSummary(event.sender, worktreePath);
+  invalidateGitStatus(worktreePath);
+  return;
 });
 
 ipcMain.handle('git-get-remote-url', async (event) => {

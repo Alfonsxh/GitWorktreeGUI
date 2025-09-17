@@ -46,7 +46,7 @@ const SourceControl: React.FC<SourceControlProps> = ({ worktreePath, onFileSelec
       Object.entries(status).forEach(([filePath, fileStatus]) => {
         // Only include files that are actually under this worktree path
         if (filePath.startsWith(worktreePath)) {
-          filteredStatus[filePath] = fileStatus;
+          filteredStatus[filePath] = fileStatus as string;
         }
       });
       console.log('Git status for', worktreePath, ':', filteredStatus);

@@ -1,18 +1,19 @@
 import * as pty from 'node-pty';
-import { ipcMain, webContents } from 'electron';
+import { webContents } from 'electron';
 
 interface TerminalSession {
   id: string;
   pty: pty.IPty;
   pid: number;
   outputBuffer: string[]; // Store output history
+  webContentsId: number;
 }
 
 export class TerminalManager {
   private sessions: Map<string, TerminalSession> = new Map();
   private nextId = 1;
 
-  createSession(workdir: string): TerminalSession {
+  createSession(workdir: string, webContentsId: number): TerminalSession {
     const id = `terminal-${this.nextId++}`;
 
     const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
@@ -29,7 +30,8 @@ export class TerminalManager {
       id,
       pty: ptyProcess,
       pid: ptyProcess.pid,
-      outputBuffer: []
+      outputBuffer: [],
+      webContentsId
     };
 
     this.sessions.set(id, session);
@@ -42,18 +44,18 @@ export class TerminalManager {
         session.outputBuffer.shift(); // Remove oldest entries
       }
 
-      const windows = webContents.getAllWebContents();
-      windows.forEach(win => {
-        win.send(`terminal-output-${id}`, data);
-      });
+      const target = webContents.fromId(session.webContentsId);
+      if (target && !target.isDestroyed()) {
+        target.send(`terminal-output-${id}`, data);
+      }
     });
 
     ptyProcess.onExit(() => {
       this.sessions.delete(id);
-      const windows = webContents.getAllWebContents();
-      windows.forEach(win => {
-        win.send(`terminal-closed-${id}`);
-      });
+      const target = webContents.fromId(session.webContentsId);
+      if (target && !target.isDestroyed()) {
+        target.send(`terminal-closed-${id}`);
+      }
     });
 
     return session;

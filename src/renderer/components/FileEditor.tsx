@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
+import { GitDecorationsService } from '../services/gitDecorations';
 
 interface FileEditorProps {
   filePath: string;
   content: string;
   language?: string;
+  worktreePath?: string;
   onChange?: (value: string) => void;
   onSave?: (content: string) => void;
 }
@@ -13,26 +15,63 @@ const FileEditor: React.FC<FileEditorProps> = ({
   filePath,
   content,
   language = 'javascript',
+  worktreePath,
   onChange,
   onSave
 }) => {
   const [editorContent, setEditorContent] = useState(content);
   const originalContentRef = useRef(content);
   const [isDirty, setIsDirty] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved'>('idle');
   const editorRef = useRef<any>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const gitDecorationsService = useRef<GitDecorationsService>(new GitDecorationsService());
 
   useEffect(() => {
-    // Only reset when switching to a different file
+    // Reset when switching to a different file or content changes
     setEditorContent(content);
     originalContentRef.current = content;
     setIsDirty(false);
-  }, [filePath]); // Only reset when file path changes
+    setAutoSaveStatus('idle');
+
+    // Clear any pending auto-save when switching files
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+    if (autoSaveStatusTimeoutRef.current) {
+      clearTimeout(autoSaveStatusTimeoutRef.current);
+      autoSaveStatusTimeoutRef.current = null;
+    }
+  }, [filePath, content]); // Reset when file path or content changes
+
+  // Cleanup auto-save timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+      if (autoSaveStatusTimeoutRef.current) {
+        clearTimeout(autoSaveStatusTimeoutRef.current);
+      }
+      gitDecorationsService.current.dispose();
+    };
+  }, []);
+
+  // Update decorations when file is saved or path changes
+  useEffect(() => {
+    if (worktreePath && filePath && editorRef.current) {
+      gitDecorationsService.current.updateDecorations(filePath, worktreePath);
+    }
+  }, [filePath, worktreePath, isDirty]);
 
   const handleSave = useCallback(() => {
+    console.log('handleSave called, editorContent length:', editorContent.length, 'originalContent length:', originalContentRef.current.length);
     const currentDirty = editorContent !== originalContentRef.current;
-    console.log('handleSave called, isDirty:', currentDirty, 'onSave exists:', !!onSave);
-    if (onSave && currentDirty) {
-      console.log('Saving file with content length:', editorContent.length);
+    console.log('isDirty:', currentDirty, 'onSave exists:', !!onSave);
+    if (onSave) {
+      console.log('Calling onSave with content length:', editorContent.length);
       onSave(editorContent);
       originalContentRef.current = editorContent; // Update original content after save
       setIsDirty(false);
@@ -65,11 +104,52 @@ const FileEditor: React.FC<FileEditorProps> = ({
       setIsDirty(dirty);
       console.log('isDirty set to:', dirty);
       onChange?.(value);
+
+      // Auto-save: Clear previous timeout and set a new one
+      if (dirty && onSave) {
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+        }
+
+        setAutoSaveStatus('pending');
+
+        // Auto-save after 1 second of no typing
+        autoSaveTimeoutRef.current = setTimeout(() => {
+          console.log('Auto-saving file...');
+          setAutoSaveStatus('saving');
+          onSave(value);
+          originalContentRef.current = value;
+          setIsDirty(false);
+          setAutoSaveStatus('saved');
+          autoSaveTimeoutRef.current = null;
+
+          // Clear saved status after 2 seconds
+          if (autoSaveStatusTimeoutRef.current) {
+            clearTimeout(autoSaveStatusTimeoutRef.current);
+          }
+          autoSaveStatusTimeoutRef.current = setTimeout(() => {
+            setAutoSaveStatus('idle');
+            autoSaveStatusTimeoutRef.current = null;
+          }, 2000);
+        }, 1000);
+      } else if (!dirty) {
+        setAutoSaveStatus('idle');
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+          autoSaveTimeoutRef.current = null;
+        }
+      }
     }
   };
 
-  const handleEditorMount = (editor: any, monaco: any) => {
+  const handleEditorMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor;
+
+    // Initialize git decorations
+    gitDecorationsService.current.setEditor(editor);
+    if (worktreePath && filePath) {
+      gitDecorationsService.current.updateDecorations(filePath, worktreePath);
+    }
 
     // Disable all validation for all languages
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
@@ -102,7 +182,7 @@ const FileEditor: React.FC<FileEditorProps> = ({
       validate: false
     });
 
-    // Add save shortcut
+    // Add save shortcut - use editor's built-in command
     editor.addAction({
       id: 'save-file',
       label: 'Save File',
@@ -114,11 +194,18 @@ const FileEditor: React.FC<FileEditorProps> = ({
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.5,
       run: () => {
-        console.log('Save shortcut triggered');
-        handleSave();
+        console.log('Monaco save shortcut triggered');
+        // Trigger save immediately with current content
+        const currentContent = editor.getValue();
+        if (onSave) {
+          console.log('Calling onSave from Monaco with content length:', currentContent.length);
+          onSave(currentContent);
+          originalContentRef.current = currentContent;
+          setIsDirty(false);
+        }
       }
     });
-  };
+  }, [onSave]);
 
   const detectLanguage = (path: string): string => {
     const fileName = path.split('/').pop()?.toLowerCase() || '';
@@ -448,11 +535,25 @@ const FileEditor: React.FC<FileEditorProps> = ({
     }
   };
 
+  const getAutoSaveIndicator = () => {
+    switch (autoSaveStatus) {
+      case 'pending':
+        return <span className="auto-save-indicator pending">Auto-save pending...</span>;
+      case 'saving':
+        return <span className="auto-save-indicator saving">Saving...</span>;
+      case 'saved':
+        return <span className="auto-save-indicator saved">✓ Saved</span>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="file-editor">
       <div className="editor-header">
         <span className="editor-file-path">{filePath}</span>
         {isDirty && <span className="editor-dirty-indicator">●</span>}
+        {getAutoSaveIndicator()}
         <span className="editor-language-indicator" style={{ marginLeft: 'auto', marginRight: '10px', fontSize: '12px', color: '#888' }}>
           {detectedLanguage}
         </span>

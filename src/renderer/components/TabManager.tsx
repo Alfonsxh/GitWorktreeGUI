@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { IconDiff, IconFiles, IconTerminal } from './icons';
 
 export interface Tab {
   id: string;
   title: string;
-  type: 'terminal' | 'editor' | 'git-log' | 'diff';
+  type: 'terminal' | 'editor' | 'git-log';
   content?: any;
   isDirty?: boolean;
   isClosable?: boolean;
+  meta?: Record<string, any>;
 }
 
 interface TabManagerProps {
@@ -24,18 +26,15 @@ const TabManager: React.FC<TabManagerProps> = ({
   onTabClose,
   onTabAdd
 }) => {
-  const getTabIcon = (type: Tab['type']) => {
+  const renderIcon = (type: Tab['type']) => {
     switch (type) {
       case 'terminal':
-        return '🖥';
-      case 'editor':
-        return '📝';
+        return <IconTerminal size={14} />;
       case 'git-log':
-        return '📊';
-      case 'diff':
-        return '⊕';
+        return <IconDiff size={14} />;
+      case 'editor':
       default:
-        return '📄';
+        return <IconFiles size={14} />;
     }
   };
 
@@ -48,16 +47,16 @@ const TabManager: React.FC<TabManagerProps> = ({
             className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
             onClick={() => onTabChange(tab.id)}
           >
-            <span className="tab-icon">{getTabIcon(tab.type)}</span>
+            <span className="tab-icon">{renderIcon(tab.type)}</span>
             <span className="tab-title">
-              {tab.isDirty && '● '}
+              {tab.isDirty ? '● ' : ''}
               {tab.title}
             </span>
             {tab.isClosable !== false && (
               <button
                 className="tab-close"
-                onClick={(e) => {
-                  e.stopPropagation();
+                onClick={(event) => {
+                  event.stopPropagation();
                   onTabClose(tab.id);
                 }}
               >

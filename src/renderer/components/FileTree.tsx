@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import * as path from 'path';
+import { IconChevronRight, IconChevronDown, IconTrash } from './icons';
+import { getVSCodeFileIcon, getVSCodeFolderIcon, getGitStatusIcon, getGitStatusColor } from '../utils/vscodeIcons';
 
 interface FileNode {
   name: string;
@@ -13,28 +14,66 @@ interface FileNode {
 interface FileTreeProps {
   rootPath: string;
   onFileSelect?: (filePath: string) => void;
-  onDiffView?: (filePath: string) => void;
 }
 
-const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect, onDiffView }) => {
+const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect }) => {
   const [tree, setTree] = useState<FileNode[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [gitStatus, setGitStatus] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
-    loadDirectory(rootPath);
-    loadGitStatus();
+    // Load git status first, then directory
+    const loadData = async () => {
+      await loadGitStatus();
+      await loadDirectory(rootPath);
+    };
+    loadData();
+
+    // Start file system watcher
+    window.electronAPI.startFileWatcher(rootPath);
+
+    // Debounced file change handler
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const handleFileChange = (data: any) => {
+      console.log('File system changed:', data);
+
+      // Clear existing timer
+      if (debounceTimer) clearTimeout(debounceTimer);
+
+      // Debounce rapid changes (e.g., during save operations)
+      debounceTimer = setTimeout(async () => {
+        // Reload git status first, then update directory
+        await loadGitStatus();
+        await loadDirectory(rootPath);
+      }, 300); // Wait 300ms after last change
+    };
+
+    // Listen for file system changes
+    const unsubscribe = window.electronAPI.onFileSystemChanged(handleFileChange);
+
+    // Cleanup
+    return () => {
+      window.electronAPI.stopFileWatcher(rootPath);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
   }, [rootPath]);
 
   useEffect(() => {
-    const interval = setInterval(loadGitStatus, 5000); // Refresh git status every 5 seconds
+    // Less frequent polling since we have file watcher
+    const interval = setInterval(loadGitStatus, 30000); // Refresh git status every 30 seconds as backup
     return () => clearInterval(interval);
   }, [rootPath]);
 
   const loadDirectory = async (dirPath: string) => {
     try {
       const files = await window.electronAPI.readDirectory(dirPath);
-      setTree(addGitStatusToNodes(files));
+      // Add git status to files immediately
+      const filesWithStatus = files.map((file: FileNode) => ({
+        ...file,
+        status: gitStatus[file.path]
+      }));
+      setTree(filesWithStatus);
     } catch (error) {
       console.error('Failed to load directory:', error);
     }
@@ -43,20 +82,30 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect, onDiffView 
   const loadGitStatus = async () => {
     try {
       const status = await window.electronAPI.gitStatus(rootPath);
+      console.log('Git status loaded for rootPath:', rootPath);
+      console.log('Git status object:', status);
+      console.log('Git status keys:', Object.keys(status));
       setGitStatus(status);
       // Update tree with new status
-      setTree(prevTree => addGitStatusToNodes(prevTree));
+      setTree(prevTree => addGitStatusToNodes(prevTree, status));
     } catch (error) {
       console.error('Failed to load git status:', error);
     }
   };
 
-  const addGitStatusToNodes = (nodes: FileNode[]): FileNode[] => {
-    return nodes.map(node => ({
-      ...node,
-      status: gitStatus[node.path],
-      children: node.children ? addGitStatusToNodes(node.children) : undefined
-    }));
+  const addGitStatusToNodes = (nodes: FileNode[], status?: { [key: string]: string }): FileNode[] => {
+    const currentStatus = status || gitStatus;
+    return nodes.map(node => {
+      const nodeStatus = currentStatus[node.path];
+      if (node.path && Object.keys(currentStatus).length > 0 && !node.isDirectory) {
+        console.log('Checking status for:', node.path, '-> status:', nodeStatus);
+      }
+      return {
+        ...node,
+        status: nodeStatus,
+        children: node.children ? addGitStatusToNodes(node.children, currentStatus) : undefined
+      };
+    });
   };
 
 
@@ -100,53 +149,112 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect, onDiffView 
   };
 
   const getStatusIndicator = (status?: string) => {
-    switch (status) {
-      case 'M': return <span className="file-status modified">M</span>;
-      case 'A': return <span className="file-status added">A</span>;
-      case 'D': return <span className="file-status deleted">D</span>;
-      case '?': return <span className="file-status untracked">?</span>;
-      default: return null;
-    }
+    if (!status) return null;
+    const statusIcon = getGitStatusIcon(status);
+    const statusColor = getGitStatusColor(status);
+    if (!statusIcon) return null;
+    return (
+      <span className="file-tree-status" style={{ marginLeft: '8px' }}>
+        <i className={`codicon ${statusIcon}`} style={{ color: statusColor, fontSize: '14px' }} />
+      </span>
+    );
   };
 
-  const handleDiffClick = (e: React.MouseEvent, node: FileNode) => {
+  const handleDeleteClick = async (e: React.MouseEvent, node: FileNode) => {
     e.stopPropagation();
-    if (onDiffView && node.status === 'M') {
-      onDiffView(node.path);
+
+    const confirmMessage = node.isDirectory
+      ? `Delete folder "${node.name}" and all its contents?`
+      : `Delete file "${node.name}"?`;
+
+    const confirmed = await window.electronAPI.showMessageBox({
+      type: 'warning',
+      title: 'Confirm Delete',
+      message: confirmMessage,
+      buttons: ['Cancel', 'Delete'],
+      defaultId: 0,
+      cancelId: 0
+    });
+
+    if (confirmed.response === 1) {
+      const result = await window.electronAPI.deleteFile(node.path);
+      if (result.success) {
+        await loadDirectory(rootPath);
+        await loadGitStatus();
+      } else {
+        await window.electronAPI.showMessageBox({
+          type: 'error',
+          title: 'Delete Failed',
+          message: `Failed to delete: ${result.error}`,
+          buttons: ['OK']
+        });
+      }
     }
   };
 
-  const renderNode = (node: FileNode, level: number = 0): React.ReactElement => {
+
+  const renderNode = (node: FileNode, level: number = 0, isLast: boolean = false, parentLines: boolean[] = []): React.ReactElement => {
     const isExpanded = expandedPaths.has(node.path);
-    const indent = level * 16;
+    const hasChildren = node.isDirectory && node.children && node.children.length > 0;
 
     return (
       <div key={node.path}>
         <div
           className="file-tree-node"
-          style={{ paddingLeft: `${indent}px` }}
           onClick={() => toggleExpanded(node)}
         >
-          {node.isDirectory ? (
-            <span className="file-tree-icon">{isExpanded ? '📂' : '📁'}</span>
-          ) : (
-            <span className="file-tree-icon">📄</span>
+          <span className="file-tree-indent">
+            {parentLines.map((hasLine, index) => (
+              <span key={index} className="tree-line">
+                {hasLine ? '│' : ' '}
+              </span>
+            ))}
+            {level > 0 && (
+              <span className="tree-line">
+                {isLast ? '└─' : '├─'}
+              </span>
+            )}
+          </span>
+
+          {node.isDirectory && (
+            <span className="file-tree-chevron">
+              {isExpanded ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+            </span>
           )}
+
+          <span className="file-tree-icon">
+            {node.isDirectory ? (
+              <i className={`codicon ${getVSCodeFolderIcon(node.name, isExpanded).icon}`} style={{ fontSize: '16px' }} />
+            ) : (
+              <i className={`codicon ${getVSCodeFileIcon(node.name).icon}`} style={{ fontSize: '16px' }} />
+            )}
+          </span>
+
           <span className="file-tree-name">{node.name}</span>
+
           {getStatusIndicator(node.status)}
-          {!node.isDirectory && node.status === 'M' && onDiffView && (
+
+          <div className="file-tree-actions">
             <button
-              className="file-tree-diff-btn"
-              onClick={(e) => handleDiffClick(e, node)}
-              title="View Diff"
+              className="file-tree-action-btn file-tree-delete-btn"
+              onClick={(e) => handleDeleteClick(e, node)}
+              title="Delete"
             >
-              ⊕
+              <IconTrash size={14} />
             </button>
-          )}
+          </div>
         </div>
+
         {node.isDirectory && isExpanded && node.children && (
           <div>
-            {node.children.map(child => renderNode(child, level + 1))}
+            {node.children.map((child, index) => {
+              const isChildLast = index === node.children!.length - 1;
+              const newParentLines = [...parentLines];
+              if (level >= 0) {
+                newParentLines.push(!isLast);
+              }
+              return renderNode(child, level + 1, isChildLast, newParentLines);
+            })}
           </div>
         )}
       </div>
@@ -168,7 +276,7 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileSelect, onDiffView 
         </div>
       </div>
       <div className="file-tree-content">
-        {tree.map(node => renderNode(node))}
+        {tree.map((node, index) => renderNode(node, 0, index === tree.length - 1, []))}
       </div>
     </div>
   );

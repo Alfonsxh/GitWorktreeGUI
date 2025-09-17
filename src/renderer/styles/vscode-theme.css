@@ -1,0 +1,186 @@
+/* Import VSCode Codicons */
+@import '@vscode/codicons/dist/codicon.css';
+
+/* VSCode-style Git Decorations */
+.monaco-editor .margin-view-overlays .git-decoration-added,
+.monaco-editor .margin-view-overlays .git-decoration-modified,
+.monaco-editor .margin-view-overlays .git-decoration-deleted {
+  position: relative;
+  width: 20px !important;
+}
+
+/* Added lines - Green vertical bar */
+.monaco-editor .margin-view-overlays .git-decoration-added::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #48c774;
+  border-radius: 1px;
+}
+
+/* Modified lines - Blue vertical bar */
+.monaco-editor .margin-view-overlays .git-decoration-modified::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: #3273dc;
+  border-radius: 1px;
+}
+
+/* Deleted lines - Red triangle */
+.monaco-editor .margin-view-overlays .git-decoration-deleted::before {
+  content: '▼';
+  position: absolute;
+  left: 5px;
+  top: -5px;
+  color: #f14668;
+  font-size: 6px;
+  line-height: 1;
+}
+
+/* Hover effect for clickable decorations */
+.monaco-editor .margin-view-overlays .git-decoration-added:hover::before,
+.monaco-editor .margin-view-overlays .git-decoration-modified:hover::before {
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.monaco-editor .margin-view-overlays .git-decoration-deleted:hover::before {
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+/* Overview ruler colors */
+.monaco-editor .decorationsOverviewRuler {
+  width: 14px !important;
+}
+
+/* Minimap decorations */
+.monaco-editor .minimap .minimap-decorations-layer {
+  opacity: 0.8;
+}
+
+/* VSCode file icons */
+.file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.file-icon.codicon {
+  font-size: 16px;
+}
+
+/* VSCode tree styles */
+.vscode-tree-node {
+  display: flex;
+  align-items: center;
+  padding: 2px 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--vscode-foreground);
+}
+
+.vscode-tree-node:hover {
+  background-color: var(--vscode-list-hoverBackground, rgba(90, 93, 94, 0.31));
+}
+
+.vscode-tree-node.selected {
+  background-color: var(--vscode-list-activeSelectionBackground, #094771);
+  color: var(--vscode-list-activeSelectionForeground, #ffffff);
+}
+
+.vscode-tree-node.focused {
+  outline: 1px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: -1px;
+}
+
+/* Git status colors in tree */
+.vscode-tree-node .git-status-modified {
+  color: #3273dc;
+}
+
+.vscode-tree-node .git-status-added {
+  color: #48c774;
+}
+
+.vscode-tree-node .git-status-deleted {
+  color: #f14668;
+}
+
+.vscode-tree-node .git-status-untracked {
+  color: #73c991;
+}
+
+/* VSCode Dark+ theme variables */
+:root {
+  --vscode-foreground: #cccccc;
+  --vscode-descriptionForeground: #ccccccb3;
+  --vscode-errorForeground: #f48771;
+  --vscode-textLink-foreground: #3794ff;
+  --vscode-textLink-activeForeground: #3794ff;
+  --vscode-textBlockQuote-background: #7f7f7f1a;
+  --vscode-textBlockQuote-border: #7f7f7f66;
+  --vscode-textCodeBlock-background: #0a0a0a66;
+  --vscode-textPreformat-foreground: #d7ba7d;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #094771;
+  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-list-inactiveSelectionBackground: #37373d;
+  --vscode-tree-indentGuidesStroke: #585858;
+  --vscode-focusBorder: #007acc;
+}
+
+/* Dark theme for git decorations */
+@media (prefers-color-scheme: dark) {
+  .git-decoration-added::before {
+    background-color: #587c0c;
+  }
+
+  .git-decoration-modified::before {
+    background-color: #1b81a8;
+  }
+
+  .git-decoration-deleted::before {
+    color: #c74e39;
+  }
+}
+
+/* Light theme for git decorations */
+@media (prefers-color-scheme: light) {
+  .git-decoration-added::before {
+    background-color: #81b88b;
+  }
+
+  .git-decoration-modified::before {
+    background-color: #6bb5db;
+  }
+
+  .git-decoration-deleted::before {
+    color: #e51400;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.git-decoration-added,
+.git-decoration-modified,
+.git-decoration-deleted {
+  animation: fadeIn 0.3s ease-in;
+}

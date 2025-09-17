@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Worktree } from '../../shared/types';
 import BranchSelectDialog from './BranchSelectDialog';
+import DeleteConfirmDialog from './DeleteConfirmDialog';
+import { IconDotsVertical, IconGitBranch } from './icons';
+import { useAppState } from '../state/AppStateContext';
 
 interface WorktreeListProps {
   worktrees: Worktree[];
@@ -15,6 +18,8 @@ const WorktreeList: React.FC<WorktreeListProps> = ({
   onSelect,
   onDelete
 }) => {
+  const { worktreeSummaries: summaries } = useAppState();
+  const [availableBranches, setAvailableBranches] = useState<string[]>([]);
   const [branchDialog, setBranchDialog] = useState<{
     show: boolean;
     title: string;
@@ -23,210 +28,58 @@ const WorktreeList: React.FC<WorktreeListProps> = ({
     defaultBranch?: string;
     onSelect: (branch: string | null) => void;
   } | null>(null);
-  // Simple context menu implementation
-  const showContextMenu = (e: React.MouseEvent, menuItems: any[]) => {
-    // Remove any existing context menu
-    const existingMenu = document.querySelector('.context-menu');
-    if (existingMenu) {
-      existingMenu.remove();
-    }
+  const [deleteDialog, setDeleteDialog] = useState<{
+    show: boolean;
+    worktree: Worktree;
+  } | null>(null);
 
-    // Create context menu element
-    const menu = document.createElement('div');
-    menu.className = 'context-menu';
-    menu.style.position = 'fixed';
-    menu.style.left = `${e.clientX}px`;
-    menu.style.top = `${e.clientY}px`;
-    menu.style.zIndex = '10000';
-
-    // Build menu items
-    menuItems.forEach(item => {
-      if (item.type === 'separator') {
-        const separator = document.createElement('div');
-        separator.className = 'context-menu-separator';
-        menu.appendChild(separator);
-      } else if (item.submenu) {
-        const submenuItem = document.createElement('div');
-        submenuItem.className = 'context-menu-item has-submenu';
-        submenuItem.textContent = item.label;
-
-        const submenu = document.createElement('div');
-        submenu.className = 'context-submenu';
-
-        item.submenu.forEach((subItem: any) => {
-          if (subItem.type === 'separator') {
-            const separator = document.createElement('div');
-            separator.className = 'context-menu-separator';
-            submenu.appendChild(separator);
-          } else {
-            const subMenuItem = document.createElement('div');
-            subMenuItem.className = 'context-menu-item';
-            subMenuItem.textContent = subItem.label;
-            subMenuItem.onclick = () => {
-              menu.remove();
-              subItem.click();
-            };
-            submenu.appendChild(subMenuItem);
-          }
-        });
-
-        submenuItem.appendChild(submenu);
-        menu.appendChild(submenuItem);
-      } else {
-        const menuItem = document.createElement('div');
-        menuItem.className = 'context-menu-item';
-        menuItem.textContent = item.label;
-        menuItem.onclick = () => {
-          menu.remove();
-          item.click();
-        };
-        menu.appendChild(menuItem);
-      }
-    });
-
-    // Add click handler to close menu when clicking outside
-    const closeMenu = (event: MouseEvent) => {
-      if (!menu.contains(event.target as Node)) {
-        menu.remove();
-        document.removeEventListener('click', closeMenu);
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        const branches = await window.electronAPI.gitGetAllBranches();
+        setAvailableBranches(branches);
+      } catch (error) {
+        console.error('Failed to load branches:', error);
       }
     };
-    document.addEventListener('click', closeMenu);
 
-    document.body.appendChild(menu);
+    if (worktrees.length > 0) {
+      loadBranches();
+    }
+  }, [worktrees]);
+
+  const handleBranchSwitch = async (worktree: Worktree, newBranch: string) => {
+    if (!newBranch || newBranch === worktree.branch) return;
+
+    try {
+      await window.electronAPI.gitSwitchBranch(worktree.path, newBranch);
+      onSelect(worktree);
+    } catch (error: any) {
+      await window.electronAPI.showMessageBox({
+        type: 'error',
+        title: 'Failed to switch branch',
+        message: error.message || 'An error occurred while switching branch',
+        buttons: ['OK']
+      });
+    }
   };
 
-  const handleContextMenu = async (e: React.MouseEvent, worktree: Worktree) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const openContextMenu = (event: React.MouseEvent, worktree: Worktree) => {
+    event.stopPropagation();
+    event.preventDefault();
 
-    const menuItems = [];
+    const menuItems: Array<{ label?: string; type?: 'separator'; action?: () => void }> = [];
 
-    // Checkout to this branch
     menuItems.push({
-      label: `Checkout to ${worktree.branch}`,
-      click: async () => {
+      label: `Checkout ${worktree.branch || 'main'}`,
+      action: async () => {
         try {
-          await window.electronAPI.gitCheckout(worktree.path, worktree.branch);
+          await window.electronAPI.gitCheckout(worktree.path, worktree.branch || 'main');
           onSelect(worktree);
         } catch (error) {
-          console.error('Failed to checkout:', error);
-          alert(`Failed to checkout: ${error}`);
-        }
-      }
-    });
-
-    // Separator
-    menuItems.push({ type: 'separator' });
-
-    // Git operations
-    menuItems.push({
-      label: 'Git Operations',
-      submenu: [
-        {
-          label: 'Pull Latest Changes',
-          click: async () => {
-            try {
-              await window.electronAPI.gitPull(worktree.path);
-              alert('Pull completed successfully');
-            } catch (error) {
-              console.error('Failed to pull:', error);
-              alert(`Failed to pull: ${error}`);
-            }
-          }
-        },
-        {
-          label: 'Push to Remote',
-          click: async () => {
-            try {
-              await window.electronAPI.gitPush(worktree.path, worktree.branch);
-              alert('Push completed successfully');
-            } catch (error) {
-              console.error('Failed to push:', error);
-              alert(`Failed to push: ${error}`);
-            }
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Merge from Branch...',
-          click: async () => {
-            const branches = await window.electronAPI.gitGetAllBranches();
-            const targetBranch = prompt(`Merge which branch into ${worktree.branch}?\n\nAvailable branches:\n${branches.join('\n')}`);
-            if (targetBranch) {
-              try {
-                await window.electronAPI.gitMerge(worktree.path, targetBranch);
-                alert(`Successfully merged ${targetBranch} into ${worktree.branch}`);
-              } catch (error) {
-                console.error('Failed to merge:', error);
-                alert(`Failed to merge: ${error}`);
-              }
-            }
-          }
-        },
-        {
-          label: 'Rebase onto Branch...',
-          click: async () => {
-            const branches = await window.electronAPI.gitGetAllBranches();
-            const targetBranch = prompt(`Rebase ${worktree.branch} onto which branch?\n\nAvailable branches:\n${branches.join('\n')}`);
-            if (targetBranch) {
-              try {
-                await window.electronAPI.gitRebase(worktree.path, targetBranch);
-                alert(`Successfully rebased onto ${targetBranch}`);
-              } catch (error) {
-                console.error('Failed to rebase:', error);
-                alert(`Failed to rebase: ${error}`);
-              }
-            }
-          }
-        }
-      ]
-    });
-
-    // Create MR/PR
-    menuItems.push({ type: 'separator' });
-    menuItems.push({
-      label: 'Create Merge/Pull Request',
-      click: async () => {
-        try {
-          const remoteUrl = await window.electronAPI.gitGetRemoteUrl();
-          if (remoteUrl) {
-            const branches = await window.electronAPI.gitGetAllBranches();
-            setBranchDialog({
-              show: true,
-              title: 'Create Merge/Pull Request',
-              message: `Select target branch for MR/PR from ${worktree.branch}:`,
-              branches: branches.filter(b => b !== worktree.branch),
-              defaultBranch: 'main',
-              onSelect: async (targetBranch) => {
-                if (targetBranch) {
-                  try {
-                    await window.electronAPI.gitCreateMergeRequest(worktree.path, targetBranch);
-                  } catch (error) {
-                    console.error('Failed to create MR/PR:', error);
-                    window.electronAPI.showMessageBox({
-                      type: 'error',
-                      title: 'Failed to create MR/PR',
-                      message: `${error}`,
-                      buttons: ['OK']
-                    });
-                  }
-                }
-              }
-            });
-          } else {
-            window.electronAPI.showMessageBox({
-              type: 'error',
-              title: 'No Remote',
-              message: 'No remote repository configured',
-              buttons: ['OK']
-            });
-          }
-        } catch (error) {
-          console.error('Failed to create MR/PR:', error);
-          window.electronAPI.showMessageBox({
+          await window.electronAPI.showMessageBox({
             type: 'error',
-            title: 'Failed to create MR/PR',
+            title: 'Checkout failed',
             message: `${error}`,
             buttons: ['OK']
           });
@@ -234,59 +87,185 @@ const WorktreeList: React.FC<WorktreeListProps> = ({
       }
     });
 
-    // Delete worktree (only for non-main branches)
+    menuItems.push({ type: 'separator' });
+
+    menuItems.push({
+      label: 'Pull latest',
+      action: async () => {
+        try {
+          await window.electronAPI.gitPull(worktree.path);
+        } catch (error) {
+          await window.electronAPI.showMessageBox({
+            type: 'error',
+            title: 'Pull failed',
+            message: `${error}`,
+            buttons: ['OK']
+          });
+        }
+      }
+    });
+
+    menuItems.push({
+      label: 'Push branch',
+      action: async () => {
+        try {
+          await window.electronAPI.gitPush(worktree.path, worktree.branch);
+        } catch (error) {
+          await window.electronAPI.showMessageBox({
+            type: 'error',
+            title: 'Push failed',
+            message: `${error}`,
+            buttons: ['OK']
+          });
+        }
+      }
+    });
+
+    menuItems.push({ type: 'separator' });
+
+    menuItems.push({
+      label: 'Switch branch…',
+      action: () => {
+        setBranchDialog({
+          show: true,
+          title: 'Switch Branch',
+          message: 'Choose a branch to check out in this worktree:',
+          branches: availableBranches,
+          defaultBranch: worktree.branch,
+          onSelect: branch => {
+            if (branch) {
+              handleBranchSwitch(worktree, branch);
+            }
+          }
+        });
+      }
+    });
+
+    menuItems.push({
+      label: 'Create Merge Request…',
+      action: async () => {
+        const targetBranch = await window.electronAPI.showPrompt(
+          'Create Merge Request',
+          'Target branch',
+          'main'
+        );
+        if (targetBranch) {
+          await window.electronAPI.gitCreateMergeRequest(worktree.path, targetBranch);
+        }
+      }
+    });
+
     if (!worktree.isMain) {
       menuItems.push({ type: 'separator' });
       menuItems.push({
-        label: `Delete Worktree "${worktree.branch}"`,
-        click: async () => {
-          const result = await window.electronAPI.showMessageBox({
-            type: 'warning',
-            title: 'Delete Worktree',
-            message: `Are you sure you want to delete worktree "${worktree.branch}"?`,
-            buttons: ['Delete', 'Cancel'],
-            defaultId: 1,
-            cancelId: 1
-          });
-          if (result.response === 0) {
-            onDelete(worktree);
-          }
-        }
+        label: `Delete worktree`,
+        action: () => setDeleteDialog({ show: true, worktree })
       });
     }
 
-    // Create simple HTML context menu
-    showContextMenu(e, menuItems);
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '2000';
+    menu.style.minWidth = '180px';
+    menu.style.padding = '6px';
+    menu.style.background = '#fff';
+    menu.style.boxShadow = 'var(--shadow-sm)';
+    menu.style.border = '1px solid var(--color-border)';
+    menu.style.borderRadius = 'var(--radius-sm)';
+    menu.style.top = `${event.clientY}px`;
+    menu.style.left = `${event.clientX}px`;
+
+    menuItems.forEach(item => {
+      if (item.type === 'separator') {
+        const separator = document.createElement('div');
+        separator.style.height = '1px';
+        separator.style.margin = '6px 0';
+        separator.style.background = 'var(--color-border)';
+        menu.appendChild(separator);
+        return;
+      }
+
+      const button = document.createElement('button');
+      button.style.width = '100%';
+      button.style.background = 'transparent';
+      button.style.border = 'none';
+      button.style.padding = '6px 8px';
+      button.style.textAlign = 'left';
+      button.style.cursor = 'pointer';
+      button.style.fontSize = '13px';
+      button.textContent = item.label ?? '';
+      button.onmouseover = () => {
+        button.style.background = 'var(--color-surface-alt)';
+      };
+      button.onmouseout = () => {
+        button.style.background = 'transparent';
+      };
+      button.onclick = () => {
+        menu.remove();
+        item.action?.();
+      };
+      menu.appendChild(button);
+    });
+
+    const handleOutsideClick = (evt: MouseEvent) => {
+      if (!menu.contains(evt.target as Node)) {
+        menu.remove();
+        document.removeEventListener('mousedown', handleOutsideClick);
+      }
+    };
+
+    document.body.appendChild(menu);
+    requestAnimationFrame(() => document.addEventListener('mousedown', handleOutsideClick));
   };
+
+  if (worktrees.length === 0) {
+    return (
+      <div style={{ padding: '16px', color: 'var(--color-text-muted)', fontSize: 13 }}>
+        No worktrees yet.
+      </div>
+    );
+  }
 
   return (
     <>
-      <div className="worktree-list">
-        <div style={{ marginBottom: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          WORKTREES
-        </div>
-        {worktrees.map((worktree) => (
+      {worktrees.map(worktree => {
+        const isActive = selectedWorktree?.path === worktree.path;
+        const summary = summaries[worktree.path];
+        return (
           <div
             key={worktree.path}
-            className={`worktree-item ${selectedWorktree?.path === worktree.path ? 'active' : ''}`}
+            className={`worktree-card ${isActive ? 'worktree-card--active' : ''}`}
             onClick={() => onSelect(worktree)}
-            onContextMenu={(e) => handleContextMenu(e, worktree)}
           >
-            <div className="worktree-name">
-              <span className={`status-indicator ${selectedWorktree?.path === worktree.path ? 'status-active' : 'status-inactive'}`} />
-              {worktree.branch || 'main'}
-              {worktree.isMain && ' 🏠'}
-              {worktree.isLocked && ' 🔒'}
+            <div className="worktree-card__title">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <IconGitBranch size={14} />
+                {worktree.branch || 'main'}
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {summary && summary.dirty > 0 && (
+                  <span className="badge badge--warning">{summary.dirty} changes</span>
+                )}
+                {worktree.isMain && <span className="badge badge--main">Main</span>}
+                {worktree.isLocked && <span className="badge">Locked</span>}
+                {worktree.isPrunable && <span className="badge badge--warning">Prunable</span>}
+                <button
+                  className="button button--muted button--icon"
+                  title="More actions"
+                  onClick={event => openContextMenu(event, worktree)}
+                >
+                  <IconDotsVertical size={16} />
+                </button>
+              </div>
             </div>
-            <div className="worktree-path" title={worktree.path}>
-              {worktree.path.split('/').pop() || worktree.path}
+            <div className="worktree-card__meta">
+              <span className="worktree-card__path">{worktree.path}</span>
             </div>
-            {worktree.isPrunable && (
-              <div className="worktree-status">Prunable</div>
-            )}
           </div>
-        ))}
-      </div>
+        );
+      })}
+
       {branchDialog?.show && (
         <BranchSelectDialog
           title={branchDialog.title}
@@ -298,6 +277,17 @@ const WorktreeList: React.FC<WorktreeListProps> = ({
             setBranchDialog(null);
           }}
           onClose={() => setBranchDialog(null)}
+        />
+      )}
+
+      {deleteDialog?.show && (
+        <DeleteConfirmDialog
+          worktree={deleteDialog.worktree}
+          onConfirm={() => {
+            onDelete(deleteDialog.worktree);
+            setDeleteDialog(null);
+          }}
+          onCancel={() => setDeleteDialog(null)}
         />
       )}
     </>

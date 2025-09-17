@@ -56,7 +56,7 @@ module.exports = [
   {
     mode: isDevelopment ? 'development' : 'production',
     entry: './src/renderer/index.tsx',
-    target: 'electron-renderer',
+    target: 'web',
     devtool: isDevelopment ? 'source-map' : false,
     module: {
       rules: [
@@ -72,15 +72,28 @@ module.exports = [
       ]
     },
     resolve: {
-      extensions: ['.tsx', '.ts', '.js']
+      extensions: ['.tsx', '.ts', '.js'],
+      fallback: {
+        "path": false,
+        "fs": false
+      }
     },
     output: {
       path: path.resolve(__dirname, 'dist'),
-      filename: 'renderer.js'
+      filename: 'renderer.js',
+      globalObject: 'this'
     },
     plugins: [
       new HtmlWebpackPlugin({
-        template: './src/renderer/index.html'
+        template: './src/renderer/index.html',
+        meta: {
+          'Content-Security-Policy': {
+            'http-equiv': 'Content-Security-Policy',
+            content: isDevelopment
+              ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+              : "default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline';"
+          }
+        }
       })
     ]
   }
