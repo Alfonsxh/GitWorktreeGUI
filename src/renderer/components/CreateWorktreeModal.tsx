@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface CreateWorktreeModalProps {
   onClose: () => void;
@@ -14,6 +15,8 @@ const CreateWorktreeModal: React.FC<CreateWorktreeModalProps> = ({ onClose, onCr
   const [filteredBranches, setFilteredBranches] = useState<string[]>([]);
   const [showBranchList, setShowBranchList] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const branchInputRef = useRef<HTMLInputElement | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number }>();
 
   // Load available branches
   useEffect(() => {
@@ -77,6 +80,29 @@ const CreateWorktreeModal: React.FC<CreateWorktreeModalProps> = ({ onClose, onCr
     }
   };
 
+  const updateDropdownPosition = () => {
+    if (!branchInputRef.current) return;
+    const rect = branchInputRef.current.getBoundingClientRect();
+    setDropdownPosition({
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!showBranchList) return;
+    updateDropdownPosition();
+
+    const handleWindowEvents = () => updateDropdownPosition();
+    window.addEventListener('resize', handleWindowEvents);
+    window.addEventListener('scroll', handleWindowEvents, true);
+    return () => {
+      window.removeEventListener('resize', handleWindowEvents);
+      window.removeEventListener('scroll', handleWindowEvents, true);
+    };
+  }, [showBranchList]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isNewBranch && showBranchList && filteredBranches.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -100,6 +126,48 @@ const CreateWorktreeModal: React.FC<CreateWorktreeModalProps> = ({ onClose, onCr
   const selectBranch = (branch: string) => {
     setBranchName(branch);
     setShowBranchList(false);
+  };
+
+  const renderBranchDropdown = () => {
+    if (!showBranchList || filteredBranches.length === 0 || !dropdownPosition) {
+      return null;
+    }
+
+    return createPortal(
+      <div
+        style={{
+          position: 'fixed',
+          top: dropdownPosition.top,
+          left: dropdownPosition.left,
+          width: dropdownPosition.width,
+          maxHeight: '240px',
+          overflowY: 'auto',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)',
+          boxShadow: 'var(--shadow-sm)',
+          zIndex: 1100
+        }}
+      >
+        {filteredBranches.map((branch, index) => (
+          <div
+            key={branch}
+            onClick={() => selectBranch(branch)}
+            style={{
+              padding: '8px 12px',
+              cursor: 'pointer',
+              background: index === selectedIndex ? 'var(--color-accent-soft)' : 'transparent',
+              color: index === selectedIndex ? 'var(--color-accent)' : 'var(--color-text-primary)',
+              fontSize: '13px'
+            }}
+            onMouseEnter={() => setSelectedIndex(index)}
+          >
+            {branch}
+          </div>
+        ))}
+      </div>,
+      document.body
+    );
   };
 
   return (
@@ -141,13 +209,13 @@ const CreateWorktreeModal: React.FC<CreateWorktreeModalProps> = ({ onClose, onCr
                 onChange={(e) => setBranchName(e.target.value)}
                 placeholder="feature/my-feature"
                 autoFocus
-                required
               />
             ) : (
               <div style={{ position: 'relative' }}>
                 <input
                   type="text"
                   className="form-input"
+                  ref={branchInputRef}
                   value={branchName}
                   onChange={(e) => {
                     setBranchName(e.target.value);
@@ -158,41 +226,8 @@ const CreateWorktreeModal: React.FC<CreateWorktreeModalProps> = ({ onClose, onCr
                   onKeyDown={handleKeyDown}
                   placeholder="Type to filter branches..."
                   autoFocus
-                  required
                 />
-                {showBranchList && filteredBranches.length > 0 && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    maxHeight: '200px',
-                    overflowY: 'auto',
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-sm)',
-                    marginTop: '4px',
-                    boxShadow: 'var(--shadow-sm)',
-                    zIndex: 10
-                  }}>
-                    {filteredBranches.map((branch, index) => (
-                      <div
-                        key={branch}
-                        onClick={() => selectBranch(branch)}
-                        style={{
-                          padding: '8px 12px',
-                          cursor: 'pointer',
-                          background: index === selectedIndex ? 'var(--color-accent-soft)' : 'transparent',
-                          color: index === selectedIndex ? 'var(--color-accent)' : 'var(--color-text-primary)',
-                          fontSize: '13px'
-                        }}
-                        onMouseEnter={() => setSelectedIndex(index)}
-                      >
-                        {branch}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {renderBranchDropdown()}
                 {!isNewBranch && availableBranches.length === 0 && (
                   <div style={{
                     fontSize: '12px',
