@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import './styles/codicons.css';
 import './styles/vscode-theme.css';
 import WorktreeList from './components/WorktreeList';
 import Terminal from './components/Terminal';
@@ -302,23 +303,45 @@ function App() {
       return;
     }
 
+    // Create tab with loading state first
+    const fileName = filePath.split('/').pop() || 'Untitled';
+    const tabId = `editor-${Date.now()}`;
+    const newTab: Tab = {
+      id: tabId,
+      title: fileName,
+      type: 'editor',
+      content: filePath,
+      isDirty: false,
+      isClosable: true,
+      isLoading: true
+    };
+
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(tabId);
+
     try {
       const content = await window.electronAPI.readFile(filePath);
+
       setFileContents(prev => new Map(prev).set(filePath, content));
 
-      const fileName = filePath.split('/').pop() || 'Untitled';
-      const newTab: Tab = {
-        id: `editor-${Date.now()}`,
-        title: fileName,
-        type: 'editor',
-        content: filePath,
-        isDirty: false,
-        isClosable: true
-      };
-
-      setTabs(prev => [...prev, newTab]);
-      setActiveTabId(newTab.id);
+      // Update tab to remove loading state - use tabId to avoid closure issues
+      setTabs(prev => {
+        return prev.map(tab => {
+          if (tab.id === tabId) {
+            return { ...tab, isLoading: false };
+          }
+          return tab;
+        });
+      });
     } catch (error) {
+      console.error('[handleFileSelect] File read failed:', error);
+
+      // Remove the failed tab
+      setTabs(prev => prev.filter(tab => tab.id !== tabId));
+
+      // If this was the active tab, switch to another
+      setActiveTabId(prev => prev === tabId ? tabs[0]?.id || '' : prev);
+
       await window.electronAPI.showMessageBox({
         type: 'error',
         title: 'Open file failed',
@@ -453,6 +476,10 @@ function App() {
     loadWorktrees();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectPath]);
+
+  useEffect(() => {
+    const activeTab = tabs.find(t => t.id === activeTabId);
+  }, [tabs, activeTabId]);
 
   useEffect(() => {
     const dispose = window.electronAPI.onGitStatusSummary(({ worktreePath, summary }) => {
@@ -624,13 +651,20 @@ function App() {
                   </div>
                 </div>
               ) : activeTab.type === 'editor' ? (
-                <FileEditor
-                  filePath={activeTab.content}
-                  content={fileContents.get(activeTab.content) || ''}
-                  worktreePath={selectedWorktree?.path}
-                  onChange={value => markFileDirty(activeTab.content, value)}
-                  onSave={value => handleFileSave(activeTab.content, value)}
-                />
+                (() => {
+
+                  return activeTab.isLoading ? (
+                    <div className="empty-state">Loading...</div>
+                  ) : (
+                    <FileEditor
+                      filePath={activeTab.content}
+                      content={fileContents.get(activeTab.content) || ''}
+                      worktreePath={selectedWorktree?.path}
+                      onChange={value => markFileDirty(activeTab.content, value)}
+                      onSave={value => handleFileSave(activeTab.content, value)}
+                    />
+                  );
+                })()
               ) : null
             ) : (
               <div className="empty-state">

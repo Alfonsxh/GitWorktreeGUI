@@ -23,18 +23,26 @@ export class GitDecorationsService {
    * Update decorations based on git diff
    */
   public async updateDecorations(filePath: string, worktreePath: string) {
-    if (!this.editor) return;
+    if (!this.editor) {
+      console.error('[GitDecorations] No editor set!');
+      return;
+    }
 
     try {
       // Get git diff from backend
       const diff = await window.electronAPI.gitDiff(worktreePath, filePath);
-      if (!diff) return;
+
+      if (!diff) {
+        return;
+      }
+
       this.diffInfo = parseDiff(diff);
 
       const decorations = this.createDecorations(this.diffInfo);
+
       this.decorationIds = this.editor.deltaDecorations(this.decorationIds, decorations);
     } catch (error) {
-      console.error('Failed to update git decorations:', error);
+      console.error('[GitDecorations] Failed to update git decorations:', error);
     }
   }
 
@@ -50,7 +58,8 @@ export class GitDecorationsService {
         range: new monaco.Range(lineNumber, 1, lineNumber, 1),
         options: {
           isWholeLine: true,
-          glyphMarginClassName: 'git-decoration-added',
+          linesDecorationsClassName: 'git-line-added',
+          glyphMarginClassName: 'git-glyph-added',
           glyphMarginHoverMessage: { value: '**Added line**' },
           overviewRuler: {
             color: 'rgba(72, 199, 116, 0.8)',
@@ -70,7 +79,8 @@ export class GitDecorationsService {
         range: new monaco.Range(lineNumber, 1, lineNumber, 1),
         options: {
           isWholeLine: true,
-          glyphMarginClassName: 'git-decoration-modified',
+          linesDecorationsClassName: 'git-line-modified',
+          glyphMarginClassName: 'git-glyph-modified',
           glyphMarginHoverMessage: { value: '**Modified line**' },
           overviewRuler: {
             color: 'rgba(37, 99, 235, 0.8)',
@@ -92,7 +102,8 @@ export class GitDecorationsService {
         range: new monaco.Range(lineNumber, Number.MAX_SAFE_INTEGER, lineNumber + 1, 1),
         options: {
           isWholeLine: false,
-          glyphMarginClassName: 'git-decoration-deleted',
+          linesDecorationsClassName: 'git-line-deleted',
+          glyphMarginClassName: 'git-glyph-deleted',
           glyphMarginHoverMessage: {
             value: `**Deleted ${deletion.count} line(s):**\n\`\`\`\n${deletedText}\n\`\`\``
           },
@@ -171,7 +182,6 @@ export class GitDecorationsService {
     if (!this.editor) return;
 
     const deletedText = deletion.content.join('\\n');
-    console.log(`Deleted ${deletion.count} lines after line ${deletion.afterLine}:\n${deletedText}`);
 
     // Could implement a custom widget here to show deleted content
   }

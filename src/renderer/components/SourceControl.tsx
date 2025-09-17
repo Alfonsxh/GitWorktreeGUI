@@ -49,7 +49,6 @@ const SourceControl: React.FC<SourceControlProps> = ({ worktreePath, onFileSelec
           filteredStatus[filePath] = fileStatus as string;
         }
       });
-      console.log('Git status for', worktreePath, ':', filteredStatus);
       setGitStatus(filteredStatus);
     } catch (error) {
       console.error('Failed to load git status:', error);

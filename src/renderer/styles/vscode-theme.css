@@ -1,5 +1,4 @@
-/* Import VSCode Codicons */
-@import '@vscode/codicons/dist/codicon.css';
+/* VSCode Codicons are now imported locally via codicons.css */
 
 /* VSCode-style Git Decorations */
 .monaco-editor .margin-view-overlays .git-decoration-added,

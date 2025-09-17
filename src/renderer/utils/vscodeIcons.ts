@@ -1,132 +1,268 @@
 import { getIconForFile, getIconForFolder, getIconForOpenFolder } from 'vscode-icons-js';
 
-export interface FileIconInfo {
-  icon: string;
-  color?: string;
-}
+type IconVariant =
+  | {
+      type: 'codicon';
+      icon: string;
+      color?: string;
+    }
+  | {
+      type: 'badge';
+      label: string;
+      background: string;
+      color: string;
+    };
+
+export type FileIconInfo = IconVariant;
+
+const COLOR_PALETTE = [
+  '#2563EB',
+  '#D946EF',
+  '#F97316',
+  '#14B8A6',
+  '#22C55E',
+  '#EC4899',
+  '#F59E0B',
+  '#6366F1',
+  '#0EA5E9',
+  '#8B5CF6',
+  '#F43F5E',
+  '#10B981'
+];
+
+const FOLDER_COLOR = '#64748b';
+const FOLDER_OPEN_COLOR = '#4f46e5';
+
+const extensionGroups: Array<{
+  match: (fileName: string, extension: string | null) => boolean;
+  icon: IconVariant;
+}> = [
+  {
+    match: (_, ext) => !!ext && ['js', 'mjs', 'cjs'].includes(ext),
+    icon: createCodicon('codicon-symbol-event', '#facc15')
+  },
+  {
+    match: (_, ext) => !!ext && ['ts', 'mts'].includes(ext),
+    icon: createCodicon('codicon-symbol-class', '#38bdf8')
+  },
+  {
+    match: (_, ext) => !!ext && ['tsx', 'jsx'].includes(ext),
+    icon: createCodicon('codicon-symbol-method', '#34d399')
+  },
+  {
+    match: (_, ext) => !!ext && ['json', 'jsonc'].includes(ext),
+    icon: createCodicon('codicon-json', '#f97316')
+  },
+  {
+    match: (_, ext) => !!ext && ['yaml', 'yml', 'toml'].includes(ext),
+    icon: createCodicon('codicon-symbol-key', '#8b5cf6')
+  },
+  {
+    match: (name, ext) => name === 'package.json' || name === 'package-lock.json' || (!!ext && ['npmrc', 'yarnrc'].includes(ext)),
+    icon: createCodicon('codicon-package', '#fb7185')
+  },
+  {
+    match: (name) => name === 'tsconfig.json' || name === 'jsconfig.json',
+    icon: createCodicon('codicon-symbol-parameter', '#22d3ee')
+  },
+  {
+    match: (_, ext) => !!ext && ['md', 'mdx'].includes(ext),
+    icon: createCodicon('codicon-markdown', '#2563eb')
+  },
+  {
+    match: (_, ext) => !!ext && ['html', 'vue', 'svelte'].includes(ext),
+    icon: createCodicon('codicon-globe', '#f97316')
+  },
+  {
+    match: (_, ext) => !!ext && ['css', 'scss', 'less', 'styl'].includes(ext),
+    icon: createCodicon('codicon-symbol-color', '#0ea5e9')
+  },
+  {
+    match: (_, ext) => !!ext && ['py'].includes(ext),
+    icon: createCodicon('codicon-server-process', '#38bdf8')
+  },
+  {
+    match: (_, ext) => !!ext && ['rb'].includes(ext),
+    icon: createCodicon('codicon-ruby', '#f43f5e')
+  },
+  {
+    match: (_, ext) => !!ext && ['go'].includes(ext),
+    icon: createCodicon('codicon-symbol-structure', '#22c55e')
+  },
+  {
+    match: (_, ext) => !!ext && ['rs'].includes(ext),
+    icon: createCodicon('codicon-symbol-namespace', '#fb7185')
+  },
+  {
+    match: (_, ext) => !!ext && ['java', 'kt'].includes(ext),
+    icon: createCodicon('codicon-symbol-interface', '#f97316')
+  },
+  {
+    match: (_, ext) => !!ext && ['php'].includes(ext),
+    icon: createCodicon('codicon-symbol-parameter', '#8b5cf6')
+  },
+  {
+    match: (_, ext) => !!ext && ['swift'].includes(ext),
+    icon: createCodicon('codicon-symbol-event', '#fb923c')
+  },
+  {
+    match: (_, ext) => !!ext && ['cpp', 'cc', 'cxx', 'hpp', 'hh'].includes(ext),
+    icon: createCodicon('codicon-symbol-namespace', '#60a5fa')
+  },
+  {
+    match: (_, ext) => !!ext && ['c', 'h'].includes(ext),
+    icon: createCodicon('codicon-symbol-numeric', '#1e293b')
+  },
+  {
+    match: (name) => /\.test\./.test(name) || /\.spec\./.test(name),
+    icon: createCodicon('codicon-beaker', '#f59e0b')
+  },
+  {
+    match: (_, ext) => !!ext && ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'].includes(ext),
+    icon: createCodicon('codicon-device-camera', '#10b981')
+  },
+  {
+    match: (_, ext) => !!ext && ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext),
+    icon: createCodicon('codicon-play', '#f43f5e')
+  },
+  {
+    match: (_, ext) => !!ext && ['mp3', 'wav', 'flac', 'ogg'].includes(ext),
+    icon: createCodicon('codicon-symbol-keyword', '#6366f1')
+  },
+  {
+    match: (_, ext) => !!ext && ['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].includes(ext),
+    icon: createCodicon('codicon-file-zip', '#22d3ee')
+  },
+  {
+    match: (name) => name === 'Dockerfile' || name.startsWith('docker-compose'),
+    icon: createCodicon('codicon-symbol-method', '#38bdf8')
+  },
+  {
+    match: (name) => name === '.env' || name.startsWith('.env'),
+    icon: createCodicon('codicon-symbol-key', '#f59e0b')
+  },
+  {
+    match: (name) => name === 'README.md' || name === 'README',
+    icon: createCodicon('codicon-book', '#6366f1')
+  }
+];
+
+const folderGroups: Array<{
+  match: (folderName: string) => boolean;
+  icon: { closed: IconVariant; opened: IconVariant };
+}> = [
+  {
+    match: name => name === 'src' || name === 'lib',
+    icon: {
+      closed: createCodicon('codicon-repo', '#2563eb'),
+      opened: createCodicon('codicon-repo', '#2563eb')
+    }
+  },
+  {
+    match: name => name === 'dist' || name === 'build',
+    icon: {
+      closed: createCodicon('codicon-archive', '#f59e0b'),
+      opened: createCodicon('codicon-archive', '#f59e0b')
+    }
+  },
+  {
+    match: name => name === 'test' || name === '__tests__',
+    icon: {
+      closed: createCodicon('codicon-beaker', '#ec4899'),
+      opened: createCodicon('codicon-beaker', '#ec4899')
+    }
+  },
+  {
+    match: name => name === 'docs' || name === 'documentation',
+    icon: {
+      closed: createCodicon('codicon-book', '#14b8a6'),
+      opened: createCodicon('codicon-book', '#14b8a6')
+    }
+  },
+  {
+    match: name => name === 'config' || name === '.config',
+    icon: {
+      closed: createCodicon('codicon-gear', '#8b5cf6'),
+      opened: createCodicon('codicon-gear', '#8b5cf6')
+    }
+  },
+  {
+    match: name => name === 'public' || name === 'static',
+    icon: {
+      closed: createCodicon('codicon-browser', '#0ea5e9'),
+      opened: createCodicon('codicon-browser', '#0ea5e9')
+    }
+  }
+];
 
 /**
- * Get VSCode icon for a file
+ * Get icon information for a file.
+ * Produces either a stylised codicon or a colourful badge derived from the extension.
  */
 export function getVSCodeFileIcon(fileName: string): FileIconInfo {
-  const iconPath = getIconForFile(fileName);
-  return parseIconPath(iconPath);
+  const extension = extractExtension(fileName);
+  const matched = extensionGroups.find(group => group.match(fileName, extension));
+  if (matched) {
+    return matched.icon;
+  }
+
+  const badgeLabel = extension ? extension.substring(0, 3) : fileName.substring(0, 2);
+  return createBadge(badgeLabel);
 }
 
 /**
- * Get VSCode icon for a folder
+ * Get icon information for a folder.
  */
 export function getVSCodeFolderIcon(folderName: string, isExpanded: boolean = false): FileIconInfo {
-  const iconPath = isExpanded
-    ? getIconForOpenFolder(folderName)
-    : getIconForFolder(folderName);
-  return parseIconPath(iconPath);
-}
-
-/**
- * Parse icon path to extract icon name
- */
-function parseIconPath(iconPath: string | undefined): FileIconInfo {
-  if (!iconPath) {
-    return { icon: 'codicon-file' };
+  const matched = folderGroups.find(group => group.match(folderName));
+  if (matched) {
+    return isExpanded ? matched.icon.opened : matched.icon.closed;
   }
 
-  // Extract icon name from path
-  const match = iconPath.match(/\/([^/]+)\.svg$/);
-  if (match) {
-    const iconName = match[1];
-    return mapToCodiconClass(iconName);
-  }
-
-  return { icon: 'codicon-file' };
+  return isExpanded
+    ? createCodicon('codicon-folder-opened', FOLDER_OPEN_COLOR)
+    : createCodicon('codicon-folder', FOLDER_COLOR);
 }
 
-/**
- * Map vscode-icons names to codicon classes
- */
-function mapToCodiconClass(iconName: string): FileIconInfo {
-  // Common file type mappings
-  const iconMap: Record<string, string> = {
-    // Programming languages
-    'file_type_js': 'codicon-file-code',
-    'file_type_javascript': 'codicon-file-code',
-    'file_type_typescript': 'codicon-file-code',
-    'file_type_tsx': 'codicon-file-code',
-    'file_type_jsx': 'codicon-file-code',
-    'file_type_python': 'codicon-file-code',
-    'file_type_java': 'codicon-file-code',
-    'file_type_cpp': 'codicon-file-code',
-    'file_type_c': 'codicon-file-code',
-    'file_type_csharp': 'codicon-file-code',
-    'file_type_go': 'codicon-file-code',
-    'file_type_rust': 'codicon-file-code',
-    'file_type_ruby': 'codicon-file-code',
-    'file_type_php': 'codicon-file-code',
-    'file_type_swift': 'codicon-file-code',
+function createCodicon(icon: string, color?: string): IconVariant {
+  return { type: 'codicon', icon, color };
+}
 
-    // Web files
-    'file_type_html': 'codicon-file-code',
-    'file_type_css': 'codicon-file-code',
-    'file_type_scss': 'codicon-file-code',
-    'file_type_sass': 'codicon-file-code',
-    'file_type_less': 'codicon-file-code',
-
-    // Data files
-    'file_type_json': 'codicon-json',
-    'file_type_xml': 'codicon-file-code',
-    'file_type_yaml': 'codicon-file-code',
-    'file_type_toml': 'codicon-file-code',
-
-    // Config files
-    'file_type_git': 'codicon-git-commit',
-    'file_type_docker': 'codicon-file-code',
-    'file_type_npm': 'codicon-file-code',
-    'file_type_eslint': 'codicon-file-code',
-    'file_type_prettier': 'codicon-file-code',
-    'file_type_webpack': 'codicon-file-code',
-
-    // Documentation
-    'file_type_markdown': 'codicon-markdown',
-    'file_type_pdf': 'codicon-file-pdf',
-    'file_type_text': 'codicon-file-text',
-
-    // Media files
-    'file_type_image': 'codicon-file-media',
-    'file_type_audio': 'codicon-file-media',
-    'file_type_video': 'codicon-file-media',
-    'file_type_font': 'codicon-file-media',
-
-    // Archives
-    'file_type_zip': 'codicon-file-zip',
-    'file_type_archive': 'codicon-file-zip',
-
-    // Folders
-    'folder_type_node_modules': 'codicon-folder-library',
-    'folder_type_src': 'codicon-folder',
-    'folder_type_dist': 'codicon-folder',
-    'folder_type_build': 'codicon-folder',
-    'folder_type_test': 'codicon-folder',
-    'folder_type_docs': 'codicon-folder',
-    'folder_type_git': 'codicon-git-commit',
-    'default_folder': 'codicon-folder',
-    'default_folder_opened': 'codicon-folder-opened',
-
-    // Default
-    'default_file': 'codicon-file'
+function createBadge(labelRaw: string): IconVariant {
+  const label = labelRaw ? labelRaw.toUpperCase() : '•';
+  const background = colorForKey(label);
+  return {
+    type: 'badge',
+    label,
+    background,
+    color: getReadableTextColor(background)
   };
+}
 
-  // Direct mapping
-  if (iconMap[iconName]) {
-    return { icon: iconMap[iconName] };
+function extractExtension(fileName: string): string | null {
+  const parts = fileName.split('.');
+  if (parts.length <= 1) return null;
+  return parts.pop()?.toLowerCase() || null;
+}
+
+function colorForKey(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash << 5) - hash + key.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
   }
+  const index = Math.abs(hash) % COLOR_PALETTE.length;
+  return COLOR_PALETTE[index];
+}
 
-  // Try to extract type and map
-  if (iconName.includes('folder')) {
-    return { icon: iconName.includes('opened') ? 'codicon-folder-opened' : 'codicon-folder' };
-  }
-
-  // Default to file icon
-  return { icon: 'codicon-file' };
+function getReadableTextColor(hexColor: string): string {
+  const color = hexColor.replace('#', '');
+  const r = parseInt(color.substring(0, 2), 16);
+  const g = parseInt(color.substring(2, 4), 16);
+  const b = parseInt(color.substring(4, 6), 16);
+  // Perceived luminance formula
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.65 ? '#111827' : '#F9FAFB';
 }
 
 /**

@@ -65,8 +65,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('file-system-changed', listener);
     return () => ipcRenderer.removeListener('file-system-changed', listener);
   },
-  gitStatus: (worktreePath: string) =>
-    ipcRenderer.invoke('git-status', worktreePath),
+  gitStatus: (worktreePath: string, options?: { force?: boolean }) =>
+    ipcRenderer.invoke('git-status', worktreePath, options),
   readFile: (filePath: string) =>
     ipcRenderer.invoke('read-file', filePath),
   writeFile: (filePath: string, content: string) =>

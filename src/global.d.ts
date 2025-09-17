@@ -25,7 +25,7 @@ interface Window {
     startFileWatcher: (dirPath: string) => Promise<{ success: boolean }>;
     stopFileWatcher: (dirPath: string) => Promise<{ success: boolean }>;
     onFileSystemChanged: (handler: (data: any) => void) => () => void;
-    gitStatus: (worktreePath: string) => Promise<any>;
+    gitStatus: (worktreePath: string, options?: { force?: boolean }) => Promise<any>;
     readFile: (filePath: string) => Promise<string>;
     writeFile: (filePath: string, content: string) => Promise<void>;
 

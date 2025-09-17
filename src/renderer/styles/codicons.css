@@ -1,0 +1,128 @@
+/* Local Codicon Font Definitions */
+
+@font-face {
+  font-family: "codicon";
+  font-display: block;
+  src: url("../assets/fonts/codicon.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+.codicon {
+  font-family: "codicon";
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+/* File and Folder Icons */
+.codicon-file:before { content: "\ea7b" }
+.codicon-file-text:before { content: "\ea7b" }
+.codicon-file-code:before { content: "\eae9" }
+.codicon-file-media:before { content: "\eaea" }
+.codicon-file-pdf:before { content: "\eaeb" }
+.codicon-file-zip:before { content: "\eaef" }
+.codicon-file-binary:before { content: "\eae8" }
+
+.codicon-folder:before { content: "\ea83" }
+.codicon-folder-opened:before { content: "\eaf7" }
+.codicon-folder-library:before { content: "\ebdf" }
+
+/* Language-specific Icons */
+.codicon-json:before { content: "\eb0f" }
+.codicon-markdown:before { content: "\eb1d" }
+
+/* Git Icons */
+.codicon-git-commit:before { content: "\eafc" }
+.codicon-git-branch:before { content: "\ea68" }
+.codicon-git-merge:before { content: "\eafe" }
+.codicon-git-compare:before { content: "\eafd" }
+
+/* Diff/Status Icons */
+.codicon-diff:before { content: "\eae1" }
+.codicon-diff-added:before { content: "\eadc" }
+.codicon-diff-modified:before { content: "\eade" }
+.codicon-diff-removed:before { content: "\eadf" }
+.codicon-diff-renamed:before { content: "\eae0" }
+.codicon-diff-ignored:before { content: "\eadd" }
+
+/* UI Icons */
+.codicon-chevron-down:before { content: "\eab4" }
+.codicon-chevron-right:before { content: "\eab6" }
+.codicon-chevron-left:before { content: "\eab5" }
+.codicon-chevron-up:before { content: "\eab7" }
+
+.codicon-close:before { content: "\ea76" }
+.codicon-x:before { content: "\ea76" }
+
+.codicon-add:before { content: "\ea60" }
+.codicon-plus:before { content: "\ea60" }
+
+.codicon-trash:before { content: "\ea81" }
+.codicon-delete:before { content: "\ea81" }
+
+.codicon-edit:before { content: "\ea73" }
+.codicon-save:before { content: "\ea74" }
+.codicon-refresh:before { content: "\ea68" }
+
+.codicon-search:before { content: "\ea6d" }
+.codicon-filter:before { content: "\eaa0" }
+.codicon-terminal:before { content: "\ea85" }
+
+.codicon-warning:before { content: "\ea6c" }
+.codicon-error:before { content: "\ea87" }
+.codicon-info:before { content: "\ea6c" }
+.codicon-question:before { content: "\ea6b" }
+.codicon-check:before { content: "\ea62" }
+
+/* Additional UI Icons */
+.codicon-split-horizontal:before { content: "\eabb" }
+.codicon-split-vertical:before { content: "\eabc" }
+.codicon-layout:before { content: "\eabe" }
+.codicon-more:before { content: "\ea7c" }
+.codicon-ellipsis:before { content: "\ea7c" }
+
+.codicon-sync:before { content: "\ea77" }
+.codicon-settings:before { content: "\ea7a" }
+.codicon-gear:before { content: "\ea7a" }
+
+.codicon-home:before { content: "\ea79" }
+.codicon-history:before { content: "\ea82" }
+
+/* Animations */
+@keyframes codicon-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.codicon-sync.codicon-modifier-spin,
+.codicon-loading.codicon-modifier-spin,
+.codicon-gear.codicon-modifier-spin {
+  animation: codicon-spin 1.5s steps(30) infinite;
+}
+
+.codicon-modifier-disabled {
+  opacity: 0.5;
+}
+
+.codicon-modifier-hidden {
+  opacity: 0;
+}
+
+/* Loading icon with custom animation */
+.codicon-loading {
+  animation-duration: 1s !important;
+  animation-timing-function: cubic-bezier(0.53, 0.21, 0.29, 0.67) !important;
+}

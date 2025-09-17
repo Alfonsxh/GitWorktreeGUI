@@ -70,6 +70,7 @@ const setupFileWatcher = (dirPath: string, webContents: WebContents) => {
       // Debounce updates
       clearTimeout((watcher as any).timeout);
       (watcher as any).timeout = setTimeout(() => {
+        invalidateGitStatus(dirPath);
         // Notify renderer of file system change
         webContents.send('file-system-changed', { path: dirPath, filename, eventType });
       }, 300);
@@ -93,18 +94,28 @@ const refreshAndEmitGitStatusSummary = async (target: WebContents, worktreePath:
   emitGitStatusSummary(target, worktreePath, files);
 };
 
-async function loadGitStatus(worktreePath: string): Promise<GitStatusMap> {
+async function loadGitStatus(
+  worktreePath: string,
+  options: { force?: boolean } = {}
+): Promise<GitStatusMap> {
   const key = resolveWorktreeKey(worktreePath);
-  const now = Date.now();
-  const cached = gitStatusCache.get(key);
+  const force = options.force ?? false;
 
-  if (cached && now - cached.timestamp < GIT_STATUS_TTL_MS) {
-    return cached.data;
-  }
+  if (force) {
+    gitStatusCache.delete(key);
+    gitStatusInflight.delete(key);
+  } else {
+    const now = Date.now();
+    const cached = gitStatusCache.get(key);
 
-  const existingPromise = gitStatusInflight.get(key);
-  if (existingPromise) {
-    return existingPromise;
+    if (cached && now - cached.timestamp < GIT_STATUS_TTL_MS) {
+      return cached.data;
+    }
+
+    const existingPromise = gitStatusInflight.get(key);
+    if (existingPromise) {
+      return existingPromise;
+    }
   }
 
   const statusPromise = (async () => {
@@ -148,7 +159,9 @@ async function loadGitStatus(worktreePath: string): Promise<GitStatusMap> {
 }
 
 const invalidateGitStatus = (worktreePath: string) => {
-  gitStatusCache.delete(resolveWorktreeKey(worktreePath));
+  const key = resolveWorktreeKey(worktreePath);
+  gitStatusCache.delete(key);
+  gitStatusInflight.delete(key);
 };
 
 function createInitialWindow() {
@@ -391,12 +404,12 @@ ipcMain.handle('read-directory', async (_, dirPath: string) => {
 });
 
 // Git status handler
-ipcMain.handle('git-status', async (event, worktreePath: string) => {
+ipcMain.handle('git-status', async (event, worktreePath: string, options?: { force?: boolean }) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
   if (!windowInfo || !windowInfo.gitManager) return {};
 
   try {
-    const files = await loadGitStatus(worktreePath);
+    const files = await loadGitStatus(worktreePath, options);
     emitGitStatusSummary(event.sender, worktreePath, files);
     return files;
   } catch (error) {
@@ -424,7 +437,7 @@ ipcMain.handle('read-file', async (_, filePath: string) => {
     const content = await fs.readFile(filePath, 'utf-8');
     return content;
   } catch (error) {
-    console.error('Failed to read file:', error);
+    console.error('[Main] Failed to read file:', filePath, error);
     throw error;
   }
 });
@@ -463,17 +476,20 @@ ipcMain.handle('git-show-file', async (event, worktreePath: string, filePath: st
 
 ipcMain.handle('git-diff', async (event, worktreePath: string, filePath: string) => {
   const windowInfo = windowManager.getWindowByWebContentsId(event.sender.id);
-  if (!windowInfo || !windowInfo.gitManager) return null;
+  if (!windowInfo || !windowInfo.gitManager) {
+    return null;
+  }
 
   try {
     const relativePath = toGitRelativePath(worktreePath, filePath);
+
     const { stdout } = await runGitCommand(['diff', 'HEAD', '--', relativePath], worktreePath, {
       maxBuffer: 10 * 1024 * 1024
     });
 
     return stdout;
   } catch (error) {
-    console.error('Failed to get git diff:', error);
+    console.error('[Main] Failed to get git diff:', error);
     throw error;
   }
 });

@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
@@ -68,6 +69,13 @@ module.exports = [
         {
           test: /\.css$/,
           use: ['style-loader', 'css-loader']
+        },
+        {
+          test: /\.(ttf|woff|woff2|eot)$/,
+          type: 'asset/resource',
+          generator: {
+            filename: 'fonts/[name].[contenthash][ext]'
+          }
         }
       ]
     },
@@ -90,10 +98,13 @@ module.exports = [
           'Content-Security-Policy': {
             'http-equiv': 'Content-Security-Policy',
             content: isDevelopment
-              ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
-              : "default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline';"
+              ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:;"
+              : "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:;"
           }
         }
+      }),
+      new MonacoWebpackPlugin({
+        languages: ['typescript', 'javascript', 'css', 'html', 'json', 'python', 'yaml', 'shell', 'markdown']
       })
     ]
   }

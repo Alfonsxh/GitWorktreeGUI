@@ -99,7 +99,9 @@ export function parseDiff(diffOutput: string): DiffInfo {
     });
   }
 
-  return { additions, modifications, deletions };
+  const result = { additions, modifications, deletions };
+
+  return result;
 }
 
 /**

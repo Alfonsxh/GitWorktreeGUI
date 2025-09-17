@@ -33,6 +33,7 @@
     "electron": "^30.0.0",
     "electron-builder": "^26.0.12",
     "html-webpack-plugin": "^5.6.4",
+    "monaco-editor-webpack-plugin": "^7.1.0",
     "style-loader": "^4.0.0",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.2",

@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { GitDecorationsService } from '../services/gitDecorations';
+
+// Configure Monaco to use local version instead of CDN
+loader.config({ monaco });
 
 interface FileEditorProps {
   filePath: string;
@@ -27,24 +31,53 @@ const FileEditor: React.FC<FileEditorProps> = ({
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const autoSaveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const gitDecorationsService = useRef<GitDecorationsService>(new GitDecorationsService());
+  const lastSyncedContentRef = useRef(content);
+  const previousFilePathRef = useRef(filePath);
 
   useEffect(() => {
-    // Reset when switching to a different file or content changes
-    setEditorContent(content);
-    originalContentRef.current = content;
-    setIsDirty(false);
-    setAutoSaveStatus('idle');
+    if (filePath !== previousFilePathRef.current) {
+      setEditorContent(content);
+      originalContentRef.current = content;
+      lastSyncedContentRef.current = content;
+      setIsDirty(false);
+      setAutoSaveStatus('idle');
 
-    // Clear any pending auto-save when switching files
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-      autoSaveTimeoutRef.current = null;
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      if (autoSaveStatusTimeoutRef.current) {
+        clearTimeout(autoSaveStatusTimeoutRef.current);
+        autoSaveStatusTimeoutRef.current = null;
+      }
+
+      previousFilePathRef.current = filePath;
+      return;
     }
-    if (autoSaveStatusTimeoutRef.current) {
-      clearTimeout(autoSaveStatusTimeoutRef.current);
-      autoSaveStatusTimeoutRef.current = null;
+
+    const editorValue = editorRef.current?.getValue();
+    const contentChanged = content !== lastSyncedContentRef.current;
+    const editorDiffersFromContent = editorValue !== undefined && editorValue !== content;
+
+    if (contentChanged && editorDiffersFromContent) {
+      setEditorContent(content);
+      originalContentRef.current = content;
+      lastSyncedContentRef.current = content;
+      setIsDirty(false);
+      setAutoSaveStatus('idle');
+
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      if (autoSaveStatusTimeoutRef.current) {
+        clearTimeout(autoSaveStatusTimeoutRef.current);
+        autoSaveStatusTimeoutRef.current = null;
+      }
     }
-  }, [filePath, content]); // Reset when file path or content changes
+
+    lastSyncedContentRef.current = content;
+  }, [filePath, content]);
 
   // Cleanup auto-save timer on unmount
   useEffect(() => {
@@ -59,21 +92,19 @@ const FileEditor: React.FC<FileEditorProps> = ({
     };
   }, []);
 
-  // Update decorations when file is saved or path changes
+  // Update decorations when file or path changes (not on every isDirty change to avoid excessive calls)
   useEffect(() => {
     if (worktreePath && filePath && editorRef.current) {
       gitDecorationsService.current.updateDecorations(filePath, worktreePath);
     }
-  }, [filePath, worktreePath, isDirty]);
+  }, [filePath, worktreePath]); // Removed isDirty from dependencies
 
   const handleSave = useCallback(() => {
-    console.log('handleSave called, editorContent length:', editorContent.length, 'originalContent length:', originalContentRef.current.length);
     const currentDirty = editorContent !== originalContentRef.current;
-    console.log('isDirty:', currentDirty, 'onSave exists:', !!onSave);
     if (onSave) {
-      console.log('Calling onSave with content length:', editorContent.length);
       onSave(editorContent);
       originalContentRef.current = editorContent; // Update original content after save
+      lastSyncedContentRef.current = editorContent;
       setIsDirty(false);
     }
   }, [editorContent, onSave]);
@@ -87,7 +118,6 @@ const FileEditor: React.FC<FileEditorProps> = ({
 
       if (saveShortcut) {
         e.preventDefault();
-        console.log('Keyboard shortcut triggered');
         handleSave();
       }
     };
@@ -98,11 +128,9 @@ const FileEditor: React.FC<FileEditorProps> = ({
 
   const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
-      console.log('Editor content changed, new length:', value.length, 'original length:', originalContentRef.current.length);
       setEditorContent(value);
       const dirty = value !== originalContentRef.current;
       setIsDirty(dirty);
-      console.log('isDirty set to:', dirty);
       onChange?.(value);
 
       // Auto-save: Clear previous timeout and set a new one
@@ -115,10 +143,10 @@ const FileEditor: React.FC<FileEditorProps> = ({
 
         // Auto-save after 1 second of no typing
         autoSaveTimeoutRef.current = setTimeout(() => {
-          console.log('Auto-saving file...');
           setAutoSaveStatus('saving');
           onSave(value);
           originalContentRef.current = value;
+          lastSyncedContentRef.current = value;
           setIsDirty(false);
           setAutoSaveStatus('saved');
           autoSaveTimeoutRef.current = null;
@@ -142,7 +170,7 @@ const FileEditor: React.FC<FileEditorProps> = ({
     }
   };
 
-  const handleEditorMount = useCallback((editor: any, monaco: any) => {
+  const handleEditorMount = useCallback((editor: any, monacoInstance: any) => {
     editorRef.current = editor;
 
     // Initialize git decorations
@@ -152,35 +180,26 @@ const FileEditor: React.FC<FileEditorProps> = ({
     }
 
     // Disable all validation for all languages
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+    monacoInstance.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: true,
       noSuggestionDiagnostics: true,
     });
 
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    monacoInstance.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
       noSyntaxValidation: true,
       noSuggestionDiagnostics: true,
     });
 
-    monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+    monacoInstance.languages.json.jsonDefaults.setDiagnosticsOptions({
       validate: false,
       allowComments: true,
       schemas: []
     });
 
-    monaco.languages.html.htmlDefaults.setOptions({
-      validate: {
-        scripts: false,
-        styles: false,
-        html: false
-      }
-    });
-
-    monaco.languages.css.cssDefaults.setOptions({
-      validate: false
-    });
+    // HTML and CSS validation options - simpler approach
+    // Note: These may not have full validation control like TypeScript/JSON
 
     // Add save shortcut - use editor's built-in command
     editor.addAction({
@@ -194,11 +213,9 @@ const FileEditor: React.FC<FileEditorProps> = ({
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.5,
       run: () => {
-        console.log('Monaco save shortcut triggered');
         // Trigger save immediately with current content
         const currentContent = editor.getValue();
         if (onSave) {
-          console.log('Calling onSave from Monaco with content length:', currentContent.length);
           onSave(currentContent);
           originalContentRef.current = currentContent;
           setIsDirty(false);
@@ -499,6 +516,9 @@ const FileEditor: React.FC<FileEditorProps> = ({
       scrollBeyondLastLine: false,
       automaticLayout: true,
       tabSize: 2,
+
+      // Enable glyph margin for git decorations
+      glyphMargin: true,
 
       // Disable all validations
       'semanticHighlighting.enabled': false,

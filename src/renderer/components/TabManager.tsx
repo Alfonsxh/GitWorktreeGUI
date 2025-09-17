@@ -8,6 +8,7 @@ export interface Tab {
   content?: any;
   isDirty?: boolean;
   isClosable?: boolean;
+  isLoading?: boolean;
   meta?: Record<string, any>;
 }
 

@@ -431,11 +431,32 @@ button {
   color: var(--color-text-muted);
 }
 
+.file-tree-chevron--spacer {
+  visibility: hidden;
+}
+
 .file-tree-icon {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 24px;
   margin-right: 6px;
   flex-shrink: 0;
+}
+
+.file-tree-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .file-tree-actions {
@@ -1063,4 +1084,55 @@ button {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* Git decoration styles */
+/* Glyph margin decorations */
+.git-glyph-added {
+  background-color: #48c774;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.git-glyph-modified {
+  background-color: #2563eb;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+.git-glyph-deleted {
+  background-color: #e74c3c;
+  width: 3px !important;
+  margin-left: 3px;
+}
+
+/* Line decorations (appears left of line numbers) */
+.git-line-added::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  background-color: #48c774;
+  position: absolute;
+  left: 0;
+}
+
+.git-line-modified::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  background-color: #2563eb;
+  position: absolute;
+  left: 0;
+}
+
+.git-line-deleted::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  background-color: #e74c3c;
+  position: absolute;
+  left: 0;
 }

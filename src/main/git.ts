@@ -103,11 +103,11 @@ export class GitWorktreeManager {
               await this.runGit(['branch', '-D', branchToDelete]);
             } catch (forceBranchError) {
               // Silently ignore branch deletion errors as they're not critical
-              console.log(`Could not delete branch ${branchToDelete}:`, forceBranchError);
+              // Could not delete branch with force
             }
           } else {
             // Silently ignore other branch deletion errors
-            console.log(`Could not delete branch ${branchToDelete}:`, branchError);
+            // Could not delete branch
           }
         }
       }
