@@ -16,13 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: linux-x64
-            os: ubuntu-22.04
-            build_args: "--linux AppImage deb rpm --x64 --publish never"
-            artifact_glob: |
-              release/*-linux-x64.AppImage
-              release/*-linux-x64.deb
-              release/*-linux-x64.rpm
           - name: macos-x64
             os: macos-13
             build_args: "--mac --x64 --publish never"
@@ -58,12 +51,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install Linux packaging deps
-        if: matrix.name == 'linux-x64'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libfuse2 rpm
 
       - name: Build application bundles
         run: npm run build:prod
