@@ -107,7 +107,8 @@
         "rpm"
       ],
       "category": "Development",
-      "icon": null
+      "icon": null,
+      "maintainer": "Alfons <alfons@example.com>"
     }
   }
 }
