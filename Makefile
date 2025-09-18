@@ -54,16 +54,16 @@ clean-install: ## Clean install with rebuild
 
 # Distribution commands
 dist: build-prod ## Build distribution package for current platform
-	$(ELECTRON_ENV) npx electron-builder
+	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder
 
 dist-mac: build-prod ## Build macOS distribution
-	$(ELECTRON_ENV) npx electron-builder --mac
+	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac
 
 dist-win: build-prod ## Build Windows distribution
-	$(ELECTRON_ENV) npx electron-builder --win
+	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win
 
 dist-linux: build-prod ## Build Linux distribution
-	$(ELECTRON_ENV) npx electron-builder --linux
+	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --linux
 
 # Complete packaging workflow
 package: ## Complete packaging workflow (clean, install, build, test)
