@@ -35,11 +35,11 @@ jobs:
             artifact_glob: |
               release/*-mac-arm64.dmg
               release/*-mac-arm64.zip
-          - name: windows-x86
+          - name: windows-x64
             os: windows-latest
-            build_args: "--win --ia32 --publish never"
+            build_args: "--win --x64 --publish never"
             artifact_glob: |
-              release/*-win-ia32.exe
+              release/*-win-x64.exe
           - name: windows-arm64
             os: windows-latest
             build_args: "--win --arm64 --publish never"
@@ -58,6 +58,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Linux packaging deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfuse2 rpm
 
       - name: Build application bundles
         run: npm run build:prod
