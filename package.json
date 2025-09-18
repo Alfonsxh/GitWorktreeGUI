@@ -5,9 +5,9 @@
   "description": "A visual interface for managing Git worktrees",
   "main": "dist/main.js",
   "scripts": {
-    "build": "webpack --config webpack.config.js",
-    "build:prod": "NODE_ENV=production webpack --config webpack.config.js",
-    "dev": "webpack --config webpack.config.js --watch",
+    "build": "webpack --config webpack.config.js --mode development",
+    "build:prod": "webpack --config webpack.config.js --mode production",
+    "dev": "webpack --config webpack.config.js --watch --mode development",
     "start": "electron ./dist/main.js",
     "electron": "npm run build && npm run start",
     "dist": "npm run build:prod && electron-builder",
@@ -64,6 +64,7 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
       "dist/**/*",
       "node_modules/**/*",
