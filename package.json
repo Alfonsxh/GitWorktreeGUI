@@ -1,7 +1,7 @@
 {
   "name": "git-worktree-gui",
   "productName": "Git Worktree Manager",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A visual interface for managing Git worktrees",
   "main": "dist/main.js",
   "scripts": {
