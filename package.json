@@ -107,7 +107,7 @@
         "rpm"
       ],
       "category": "Development",
-      "icon": "assets"
+      "icon": null
     }
   }
 }
