@@ -2,6 +2,11 @@
 
 # Environment variables for Electron mirror (China friendly)
 ELECTRON_ENV = ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+ELECTRON_BUILDER ?= $(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder
+DIST_ARGS ?=
+DIST_MAC_ARGS ?=
+DIST_WIN_ARGS ?=
+DIST_LINUX_ARGS ?=
 
 .PHONY: help build dev start run clean install dist dist-mac dist-win dist-linux
 .PHONY: setup rebuild clean-install build-prod package test-package release
@@ -54,16 +59,16 @@ clean-install: ## Clean install with rebuild
 
 # Distribution commands
 dist: build-prod ## Build distribution package for current platform
-	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder
+	$(ELECTRON_BUILDER) $(DIST_ARGS)
 
 dist-mac: build-prod ## Build macOS distribution
-	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac
+	$(ELECTRON_BUILDER) --mac $(DIST_MAC_ARGS)
 
 dist-win: build-prod ## Build Windows distribution
-	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win
+	$(ELECTRON_BUILDER) --win $(DIST_WIN_ARGS)
 
 dist-linux: build-prod ## Build Linux distribution
-	$(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --linux
+	$(ELECTRON_BUILDER) --linux $(DIST_LINUX_ARGS)
 
 # Complete packaging workflow
 package: ## Complete packaging workflow (clean, install, build, test)

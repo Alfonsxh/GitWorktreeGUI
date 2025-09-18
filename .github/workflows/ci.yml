@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -28,23 +32,27 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
+    - name: Install make (Windows)
+      if: runner.os == 'Windows'
+      run: choco install make -y
+
     - name: Build application
-      run: npm run build:prod
+      run: make build-prod
 
     - name: Run tests
       run: npm test || true
 
-    - name: Build distributables
+    - name: Build distributables (Linux)
       if: matrix.os == 'ubuntu-latest'
-      run: npm run dist:linux
+      run: make dist-linux
 
-    - name: Build distributables
+    - name: Build distributables (Windows)
       if: matrix.os == 'windows-latest'
-      run: npm run dist:win
+      run: make dist-win
 
-    - name: Build distributables
+    - name: Build distributables (macOS)
       if: matrix.os == 'macos-latest'
-      run: npm run dist:mac
+      run: make dist-mac
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

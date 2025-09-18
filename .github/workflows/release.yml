@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: write
 
@@ -18,24 +22,28 @@ jobs:
         include:
           - name: macos-x64
             os: macos-13
-            build_args: "--mac --x64 --publish never"
+            make_target: dist-mac
+            make_args: 'DIST_MAC_ARGS="--x64 --publish never"'
             artifact_glob: |
               release/*-mac-x64.dmg
               release/*-mac-x64.zip
           - name: macos-arm64
             os: macos-14
-            build_args: "--mac --arm64 --publish never"
+            make_target: dist-mac
+            make_args: 'DIST_MAC_ARGS="--arm64 --publish never"'
             artifact_glob: |
               release/*-mac-arm64.dmg
               release/*-mac-arm64.zip
           - name: windows-x64
             os: windows-latest
-            build_args: "--win --x64 --publish never"
+            make_target: dist-win
+            make_args: 'DIST_WIN_ARGS="--x64 --publish never"'
             artifact_glob: |
               release/*-win-x64.exe
           - name: windows-arm64
             os: windows-latest
-            build_args: "--win --arm64 --publish never"
+            make_target: dist-win
+            make_args: 'DIST_WIN_ARGS="--arm64 --publish never"'
             artifact_glob: |
               release/*-win-arm64.exe
 
@@ -52,14 +60,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install make (Windows)
+        if: runner.os == 'Windows'
+        run: choco install make -y
+
       - name: Build application bundles
-        run: npm run build:prod
+        run: make build-prod
 
       - name: Package ${{ matrix.name }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder ${{ matrix.build_args }}
+        run: make ${{ matrix.make_target }} ${{ matrix.make_args }}
 
       - name: Upload packaged artifacts
         uses: actions/upload-artifact@v4
