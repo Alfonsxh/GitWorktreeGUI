@@ -17,8 +17,25 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: [20.x]
+        include:
+          - os: ubuntu-latest
+            node-version: 20.x
+            name: ubuntu
+            artifacts: |
+              release/*-linux-*.AppImage
+              release/*-linux-*.deb
+              release/*-linux-*.rpm
+          - os: windows-latest
+            node-version: 20.x
+            name: windows
+            artifacts: |
+              release/*-win-*.exe
+          - os: macos-latest
+            node-version: 20.x
+            name: macos
+            artifacts: |
+              release/*-mac-*.dmg
+              release/*-mac-*.zip
 
     steps:
     - name: Checkout code
@@ -59,5 +76,6 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }}-build
-        path: release/
+        path: ${{ matrix.artifacts }}
+        if-no-files-found: error
         retention-days: 7
