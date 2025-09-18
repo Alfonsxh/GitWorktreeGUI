@@ -23,27 +23,27 @@ jobs:
           - name: macos-x64
             os: macos-13
             make_target: dist-mac
-            make_args: 'DIST_MAC_ARGS="--x64 --publish never"'
+            make_args: 'DIST_MAC_ARGS="--x64"'
             artifact_glob: |
               release/*-mac-x64.dmg
               release/*-mac-x64.zip
           - name: macos-arm64
             os: macos-14
             make_target: dist-mac
-            make_args: 'DIST_MAC_ARGS="--arm64 --publish never"'
+            make_args: 'DIST_MAC_ARGS="--arm64"'
             artifact_glob: |
               release/*-mac-arm64.dmg
               release/*-mac-arm64.zip
           - name: windows-x64
             os: windows-latest
             make_target: dist-win
-            make_args: 'DIST_WIN_ARGS="--x64 --publish never"'
+            make_args: 'DIST_WIN_ARGS="--x64"'
             artifact_glob: |
               release/*-win-x64.exe
           - name: windows-arm64
             os: windows-latest
             make_target: dist-win
-            make_args: 'DIST_WIN_ARGS="--arm64 --publish never"'
+            make_args: 'DIST_WIN_ARGS="--arm64"'
             artifact_glob: |
               release/*-win-arm64.exe
 

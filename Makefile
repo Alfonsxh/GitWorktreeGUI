@@ -2,7 +2,8 @@
 
 # Environment variables for Electron mirror (China friendly)
 ELECTRON_ENV = ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-ELECTRON_BUILDER ?= $(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder
+ELECTRON_PUBLISH_ARGS ?= --publish never
+ELECTRON_BUILDER ?= $(ELECTRON_ENV) CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder $(ELECTRON_PUBLISH_ARGS)
 DIST_ARGS ?=
 DIST_MAC_ARGS ?=
 DIST_WIN_ARGS ?=
