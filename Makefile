@@ -14,10 +14,10 @@ install: ## Install dependencies
 	$(ELECTRON_ENV) npm install
 
 build: ## Build the application (development)
-	npm run build
+	npx webpack --config webpack.config.js --mode development
 
 build-prod: ## Build the application (production)
-	npm run build:prod
+	npx webpack --config webpack.config.js --mode production
 
 dev: ## Start development mode with watch
 	npm run dev
@@ -53,17 +53,17 @@ clean-install: ## Clean install with rebuild
 	$(MAKE) rebuild
 
 # Distribution commands
-dist: ## Build distribution package for current platform
-	npm run dist
+dist: build-prod ## Build distribution package for current platform
+	$(ELECTRON_ENV) npx electron-builder
 
-dist-mac: ## Build macOS distribution
-	npm run dist:mac
+dist-mac: build-prod ## Build macOS distribution
+	$(ELECTRON_ENV) npx electron-builder --mac
 
-dist-win: ## Build Windows distribution
-	npm run dist:win
+dist-win: build-prod ## Build Windows distribution
+	$(ELECTRON_ENV) npx electron-builder --win
 
-dist-linux: ## Build Linux distribution
-	npm run dist:linux
+dist-linux: build-prod ## Build Linux distribution
+	$(ELECTRON_ENV) npx electron-builder --linux
 
 # Complete packaging workflow
 package: ## Complete packaging workflow (clean, install, build, test)

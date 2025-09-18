@@ -10,10 +10,6 @@
     "dev": "webpack --config webpack.config.js --watch --mode development",
     "start": "electron ./dist/main.js",
     "electron": "npm run build && npm run start",
-    "dist": "npm run build:prod && electron-builder",
-    "dist:mac": "npm run build:prod && electron-builder --mac",
-    "dist:win": "npm run build:prod && electron-builder --win",
-    "dist:linux": "npm run build:prod && electron-builder --linux",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
