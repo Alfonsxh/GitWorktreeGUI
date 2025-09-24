@@ -1,0 +1,30 @@
+<idea-plugin>
+  <id>com.alfons.worktree.plugin</id>
+  <name>Worktree Toolwindow</name>
+  <vendor email="alfons@example.com">Alfons</vendor>
+  <description><![CDATA[
+    <p>Dedicated Worktree management tab integrated with the Git tool window.</p>
+  ]]></description>
+
+  <idea-version since-build="243" until-build="251.*"/>
+
+  <depends>Git4Idea</depends>
+  <depends optional="true">com.intellij.terminal</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <notificationGroup id="Worktree" displayType="BALLOON"/>
+    <applicationService serviceImplementation="com.alfons.worktree.plugin.settings.WorktreeSettingsService"/>
+    <projectService serviceImplementation="com.alfons.worktree.plugin.services.WorktreeService"/>
+    <postStartupActivity implementation="com.alfons.worktree.plugin.ui.WorktreeStartupActivity"/>
+    <applicationConfigurable displayName="Worktree" instance="com.alfons.worktree.plugin.settings.ui.WorktreeSettingsConfigurable"/>
+  </extensions>
+
+  <actions>
+    <action id="com.alfons.worktree.action.AddWorktree" class="com.alfons.worktree.plugin.actions.AddWorktreeAction"
+            text="Add Worktree" description="Create a new git worktree for the selected repository"/>
+    <action id="com.alfons.worktree.action.OpenWorktreeTerminal" class="com.alfons.worktree.plugin.actions.OpenWorktreeInTerminalAction"
+            text="Open Worktree in Terminal" description="Open selected worktree in integrated terminal"/>
+    <action id="com.alfons.worktree.action.RefreshWorktree" class="com.alfons.worktree.plugin.actions.RefreshWorktreeAction"
+            text="Refresh Worktrees" description="Re-scan worktree state"/>
+  </actions>
+</idea-plugin>
